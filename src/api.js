@@ -22,7 +22,7 @@ export async function callApi(action, payload = {}) {
 
 export async function getProfile() {
   if (CONFIG.demoMode || !CONFIG.liffId || !window.liff) {
-    return { id: 'demo-jacky', name: 'Jacky_test', role: '業務', company: '捷旭', lineUserId: 'demo-user' };
+    return { id: 'demo-sales', name: '示範業務', role: '業務', company: '捷旭', lineUserId: 'demo-user' };
   }
   await window.liff.init({ liffId: CONFIG.liffId });
   if (!window.liff.isLoggedIn()) window.liff.login();
