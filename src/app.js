@@ -1,5 +1,5 @@
-import { getProfile, callApi } from './api.js?v=20261118c';
-import { shell, homeView, machineView, tenderView, formView, productView, profileView, recordView, loadingView, toast } from './views.js?v=20261118c';
+import { getProfile, callApi } from './api.js?v=20261118d';
+import { shell, homeView, machineView, tenderView, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261118d';
 import { machines } from './mock-data.js';
 
 const app = document.querySelector('#app');
@@ -10,10 +10,10 @@ function contentFor(page) {
   if (page === 'home') return homeView(profile);
   if (page === 'machine') return machineView();
   if (page === 'tender') return tenderView();
-  if (page === 'product') return productView();
+  if (page === 'report') return reportView();
   if (page === 'profile') return profileView(profile);
   if (page === 'record') return recordView();
-  if (['visit','forecast','transfer','performance'].includes(page)) return formView(page, profile);
+  if (['forecast','transfer','performance'].includes(page)) return formView(page, profile);
   return homeView(profile);
 }
 
