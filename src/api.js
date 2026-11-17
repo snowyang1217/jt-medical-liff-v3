@@ -1,4 +1,4 @@
-import { CONFIG } from './config.js?v=20261118b';
+import { CONFIG } from './config.js?v=20261118c';
 
 const wait = (ms = 280) => new Promise((resolve) => setTimeout(resolve, ms));
 
