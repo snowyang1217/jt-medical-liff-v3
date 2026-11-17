@@ -1,8 +1,8 @@
 export const CONFIG = {
   appName: '捷旭醫療 業務行動系統',
-  liffId: '', // 建立新版 LIFF 後填入，不可放任何 Odoo Key。
+  liffId: '2010246946-vglTecru', // LIFF ID；不可放任何 Odoo Key。
   makeWebhookUrl: '', // 建立新版 Make Webhook 後填入。
-  demoMode: true,
+  demoMode: false,
   companyOptions: ['捷旭', '聯友泰'],
   navigation: [
     { id: 'home', label: '首頁', icon: '⌂' },
