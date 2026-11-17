@@ -10,3 +10,12 @@ export const CONFIG = {
     { id: 'record', label: '填報', icon: '+' },
     { id: 'profile', label: '我的', icon: '◉' }
   ]
+};
+
+export const MODELS = {
+  machine: 'x_1212',
+  transfer: 'x_1213',
+  forecast: 'x_1214',
+  tender: 'x_1215',
+  performance: 'x_1216'
+};
