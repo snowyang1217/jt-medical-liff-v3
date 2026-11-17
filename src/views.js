@@ -1,4 +1,4 @@
-import { CONFIG } from './config.js';
+import { CONFIG } from './config.js?v=20261118';
 import { machines, tenders, products, hospitals, employees } from './mock-data.js';
 
 const html = String.raw;
