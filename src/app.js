@@ -5,6 +5,21 @@ import { machines } from './mock-data.js';
 const app = document.querySelector('#app');
 let profile = null;
 let currentPage = 'home';
+const availablePages = new Set(['home', 'machine', 'forecast', 'tender', 'transfer', 'report', 'performance', 'record', 'profile']);
+
+function launchedPage() {
+  const directPage = new URLSearchParams(location.search).get('page');
+  const liffState = new URLSearchParams(location.search).get('liff.state');
+  let statePage = '';
+  if (liffState) {
+    try {
+      const stateUrl = new URL(liffState, location.origin);
+      statePage = stateUrl.searchParams.get('page') || stateUrl.hash.replace('#', '');
+    } catch { /* Use the default page if LINE sends an unreadable state. */ }
+  }
+  const page = directPage || statePage || location.hash.replace('#', '') || 'home';
+  return availablePages.has(page) ? page : 'home';
+}
 
 function contentFor(page) {
   if (page === 'home') return homeView(profile);
@@ -60,7 +75,7 @@ async function submitForm(event) {
 
 async function start() {
   app.innerHTML = loadingView();
-  try { profile = await getProfile(); render(location.hash.slice(1) || 'home'); }
+  try { profile = await getProfile(); render(launchedPage()); }
   catch (error) { app.innerHTML = `<div class="fatal"><h1>無法啟動系統</h1><p>${error.message}</p><button onclick="location.reload()">重新整理</button></div>`; }
 }
 window.addEventListener('hashchange', () => render(location.hash.slice(1) || 'home'));
