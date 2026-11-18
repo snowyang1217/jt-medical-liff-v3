@@ -22,11 +22,18 @@ export async function callApi(action, payload = {}) {
 
 export async function getProfile() {
   if (CONFIG.demoMode || !CONFIG.liffId || !window.liff) {
-    return { id: 'demo-sales', name: '示範業務', role: '業務', company: '捷旭', lineUserId: 'demo-user' };
+    return { id: 'demo-sales', name: '示範業務', role: '業務', company: '捷旭', lineUserId: 'demo-user', idToken: null };
   }
   await window.liff.init({ liffId: CONFIG.liffId });
   if (!window.liff.isLoggedIn()) window.liff.login();
   const lineProfile = await window.liff.getProfile();
-  const result = await callApi('GET_PROFILE', { lineUserId: lineProfile.userId });
-  return { ...result.profile, lineUserId: lineProfile.userId };
+  const idToken = window.liff.getIDToken();
+  if (!idToken) throw new Error('無法取得 LINE 身分驗證，請重新開啟系統。');
+
+  if (!CONFIG.makeWebhookUrl) {
+    return { id: lineProfile.userId, name: lineProfile.displayName, role: '業務', company: '捷旭', lineUserId: lineProfile.userId, idToken };
+  }
+
+  const result = await callApi('GET_PROFILE', { auth: { idToken, lineUserId: lineProfile.userId } });
+  return { ...result.profile, lineUserId: lineProfile.userId, idToken };
 }
