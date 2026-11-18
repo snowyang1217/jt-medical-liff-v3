@@ -1,4 +1,4 @@
-import { getProfile, callApi } from './api.js?v=20261118d';
+import { getProfile, callApi } from './api.js?v=20261118f';
 import { shell, homeView, machineView, tenderView, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261118d';
 import { machines } from './mock-data.js';
 
@@ -64,7 +64,11 @@ async function submitForm(event) {
   const values = Object.fromEntries(new FormData(form).entries());
   form.querySelectorAll('input, select, textarea').forEach((input) => { if (input.id) values[input.id] = input.value; });
   try {
-    await callApi('CREATE_RECORD', { model: form.dataset.kind, profile, data: values });
+    await callApi('CREATE_RECORD', {
+      model: form.dataset.kind,
+      auth: { idToken: profile.idToken, lineUserId: profile.lineUserId },
+      data: values
+    });
     document.body.insertAdjacentHTML('beforeend', toast('資料已送出，稍後可在 Odoo 查閱。'));
     setTimeout(() => document.querySelector('.toast')?.remove(), 2600);
     form.reset();
