@@ -1,4 +1,4 @@
-import { getProfile, callApi } from './api.js?v=20261118f';
+import { getProfile, callApi } from './api.js?v=20261119a';
 import { shell, homeView, machineView, tenderView, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261118d';
 import { machines } from './mock-data.js';
 
