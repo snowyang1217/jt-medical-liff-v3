@@ -1,5 +1,5 @@
-import { getProfile, callApi } from './api.js?v=20261119a';
-import { shell, homeView, machineView, tenderView, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261118d';
+import { getProfile, callApi } from './api.js?v=20261122a';
+import { shell, homeView, machineView, tenderView, tenderResults, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261122a';
 import { machines } from './mock-data.js';
 
 const app = document.querySelector('#app');
@@ -46,6 +46,7 @@ function bindEvents() {
   app.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => {
     app.querySelectorAll('[data-filter]').forEach((x) => x.classList.remove('active')); button.classList.add('active'); filterMachines('', button.dataset.filter);
   }));
+  app.querySelector('#tenderSearch')?.addEventListener('submit', searchTenders);
   app.querySelector('#dataForm')?.addEventListener('submit', submitForm);
 }
 
@@ -54,6 +55,40 @@ function filterMachines(query = '', status = document.querySelector('.filter.act
   const keyword = query.toLowerCase();
   const filtered = machines.filter((m) => (status === 'all' || m.status === status) && `${m.code} ${m.keeper} ${m.company}`.toLowerCase().includes(keyword));
   list.innerHTML = filtered.length ? filtered.map((m) => `<article class="record-card"><div><strong>${m.code}</strong><p>${m.company} · 目前保管人：${m.keeper}</p><small>開始日期 ${m.startedAt}</small></div><span class="pill">${m.status}</span></article>`).join('') : '<p class="empty">沒有符合的機台資料。</p>';
+}
+
+async function searchTenders(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const submit = form.querySelector('button[type="submit"]');
+  if (submit.disabled) return;
+
+  const status = app.querySelector('#tenderStatus');
+  const results = app.querySelector('#tenderResults');
+  const keyword = form.elements.namedItem('keyword').value.trim();
+  results.replaceChildren();
+  if (!keyword) {
+    status.textContent = '請輸入標案名稱或編號。';
+    return;
+  }
+
+  submit.disabled = true;
+  status.textContent = '查詢中…';
+  try {
+    const { tenders } = await callApi('SEARCH_TENDER', {
+      auth: { idToken: profile.idToken, lineUserId: profile.lineUserId },
+      data: { keyword }
+    });
+    if (!Array.isArray(tenders) || tenders.some((record) => typeof record?.x_name !== 'string')) {
+      throw new Error('系統回傳的標案資料格式不正確，請稍後再試。');
+    }
+    results.innerHTML = tenderResults(tenders);
+    status.textContent = tenders.length ? `找到 ${tenders.length} 筆標案。` : '找不到符合的標案。';
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    submit.disabled = false;
+  }
 }
 
 async function submitForm(event) {
@@ -82,5 +117,8 @@ async function start() {
   try { profile = await getProfile(); render(launchedPage()); }
   catch (error) { app.innerHTML = `<div class="fatal"><h1>無法啟動系統</h1><p>${error.message}</p><button onclick="location.reload()">重新整理</button></div>`; }
 }
-window.addEventListener('hashchange', () => render(location.hash.slice(1) || 'home'));
+window.addEventListener('hashchange', () => {
+  const page = location.hash.slice(1) || 'home';
+  if (profile && page !== currentPage) render(page);
+});
 start();
