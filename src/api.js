@@ -14,6 +14,9 @@ export async function callApi(action, payload = {}) {
     body: JSON.stringify({ action, ...payload })
   });
 
+  if (action === 'SEARCH_TENDER' && response.status === 403) {
+    throw new Error('這個 LINE 帳號尚未取得標案查詢權限。');
+  }
   if (!response.ok) throw new Error('系統暫時無法連線，請稍後再試。');
   const data = await response.json();
   if (!data.ok) throw new Error(data.message || '資料處理失敗。');
