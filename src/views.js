@@ -38,6 +38,9 @@ export function inventoryView() {
   return html`
     <div class="page-head"><button class="back" data-page="home" aria-label="回首頁">‹</button><div><h1>產品／庫存查詢</h1></div></div>
     <form id="inventorySearch" role="search">
+      <label class="field"><span>查詢倉庫</span><select name="warehouse" required>
+        ${CONFIG.inventoryWarehouses.map(({code, name}) => `<option value="${escapeHtml(code)}">${escapeHtml(name)}</option>`).join('')}
+      </select></label>
       <label class="field"><span>品名或料號</span><input name="keyword" type="search" placeholder="輸入品名或料號" maxlength="80" required /></label>
       <button class="primary" type="submit">查詢庫存</button>
     </form>
