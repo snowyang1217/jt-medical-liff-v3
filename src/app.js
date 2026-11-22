@@ -1,11 +1,11 @@
 import { getProfile, callApi } from './api.js?v=20261122a';
-import { shell, homeView, machineView, tenderView, tenderResults, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261122a';
+import { shell, homeView, machineView, tenderView, tenderResults, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261122b';
 import { machines } from './mock-data.js';
 
 const app = document.querySelector('#app');
 let profile = null;
 let currentPage = 'home';
-const availablePages = new Set(['home', 'machine', 'forecast', 'tender', 'transfer', 'report', 'performance', 'record', 'profile']);
+const availablePages = new Set(['home', 'tender']);
 
 function launchedPage() {
   const directPage = new URLSearchParams(location.search).get('page');
@@ -22,19 +22,19 @@ function launchedPage() {
 }
 
 function contentFor(page) {
-  if (page === 'home') return homeView(profile);
+  if (page === 'home') return homeView(profile, availablePages);
   if (page === 'machine') return machineView();
   if (page === 'tender') return tenderView();
   if (page === 'report') return reportView();
   if (page === 'profile') return profileView(profile);
   if (page === 'record') return recordView();
   if (['forecast','transfer','performance'].includes(page)) return formView(page, profile);
-  return homeView(profile);
+  return homeView(profile, availablePages);
 }
 
 function render(page = currentPage) {
-  currentPage = page;
-  app.innerHTML = shell(profile, page, contentFor(page));
+  currentPage = availablePages.has(page) ? page : 'home';
+  app.innerHTML = shell(profile, currentPage, contentFor(currentPage), availablePages);
   bindEvents();
 }
 
