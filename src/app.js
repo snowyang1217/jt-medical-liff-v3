@@ -1,3 +1,4 @@
+import { CONFIG } from './config.js?v=20261122e';
 import { getProfile, callApi } from './api.js?v=20261122e';
 import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261122e';
 
@@ -71,8 +72,14 @@ async function searchRecords(event, { prefix, action, key, nameField, label, pro
   const status = app.querySelector(`#${prefix}Status`);
   const results = app.querySelector(`#${prefix}Results`);
   const keyword = form.elements.namedItem('keyword').value.trim();
+  const inventory = action === 'SEARCH_INVENTORY';
+  const warehouse = inventory ? form.elements.namedItem('warehouse').value : null;
   results.replaceChildren();
-  if (!keyword || (action === 'SEARCH_INVENTORY' && (keyword.length > 80 || !/[^%_\s]/u.test(keyword)))) {
+  if (inventory && !CONFIG.inventoryWarehouses.some(({ code }) => code === warehouse)) {
+    status.textContent = '請選擇要查詢的倉庫。';
+    return;
+  }
+  if (!keyword || (inventory && (keyword.length > 80 || !/[^%_\s]/u.test(keyword)))) {
     status.textContent = prompt;
     return;
   }
@@ -82,19 +89,20 @@ async function searchRecords(event, { prefix, action, key, nameField, label, pro
   try {
     const response = await callApi(action, {
       auth: { idToken: profile.idToken, lineUserId: profile.lineUserId },
-      data: { keyword }
+      data: inventory ? { keyword, warehouse } : { keyword }
     });
     const records = response[key];
     if (!Array.isArray(records) || records.some((record) => typeof record?.[nameField] !== 'string')) {
       throw new Error(`系統回傳的${label}資料格式不正確，請稍後再試。`);
     }
-    if (action === 'SEARCH_INVENTORY' && (typeof response.warehouse !== 'string' || !response.warehouse.trim())) {
-      throw new Error('系統未回傳庫存所屬倉庫，請稍後再試。');
+    if (inventory && (response.warehouse?.code !== warehouse ||
+      typeof response.warehouse.name !== 'string' || !response.warehouse.name.trim())) {
+      throw new Error('系統回傳的倉庫與查詢不符，請稍後再試。');
     }
 
     results.innerHTML = renderResults(records);
     const count = records.length ? `找到 ${records.length} 筆${label}。` : `找不到符合的${label}。`;
-    status.textContent = action === 'SEARCH_INVENTORY' ? `倉庫：${response.warehouse} · ${count}` : count;
+    status.textContent = inventory ? `倉庫：${response.warehouse.name} · ${count}` : count;
   } catch (error) {
     status.textContent = error.message;
   } finally {
