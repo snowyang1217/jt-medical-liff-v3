@@ -1,5 +1,5 @@
 import { getProfile, callApi } from './api.js?v=20261122c';
-import { shell, homeView, machineView, tenderView, tenderResults, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261122b';
+import { shell, homeView, machineView, tenderView, tenderResults, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261122d';
 import { machines } from './mock-data.js';
 
 const app = document.querySelector('#app');
