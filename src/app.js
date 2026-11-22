@@ -1,11 +1,11 @@
-import { getProfile, callApi } from './api.js?v=20261122c';
-import { shell, homeView, machineView, tenderView, tenderResults, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261122d';
-import { machines } from './mock-data.js';
+import { CONFIG } from './config.js?v=20261122e';
+import { getProfile, callApi } from './api.js?v=20261122e';
+import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261122e';
 
 const app = document.querySelector('#app');
 let profile = null;
 let currentPage = 'home';
-const availablePages = new Set(['home', 'tender']);
+const availablePages = new Set(['home', 'tender', 'machine']);
 
 function launchedPage() {
   const directPage = new URLSearchParams(location.search).get('page');
@@ -23,7 +23,7 @@ function launchedPage() {
 
 function contentFor(page) {
   if (page === 'home') return homeView(profile, availablePages);
-  if (page === 'machine') return machineView();
+  if (page === 'machine') return inventoryView();
   if (page === 'tender') return tenderView();
   if (page === 'report') return reportView();
   if (page === 'profile') return profileView(profile);
@@ -42,48 +42,67 @@ function navigate(page) { window.location.hash = page === 'home' ? '' : `#${page
 
 function bindEvents() {
   app.querySelectorAll('[data-page]').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.page)));
-  app.querySelector('#machineSearch')?.addEventListener('input', (event) => filterMachines(event.target.value));
-  app.querySelectorAll('[data-filter]').forEach((button) => button.addEventListener('click', () => {
-    app.querySelectorAll('[data-filter]').forEach((x) => x.classList.remove('active')); button.classList.add('active'); filterMachines('', button.dataset.filter);
+  app.querySelector('#inventorySearch')?.addEventListener('submit', (event) => searchRecords(event, {
+    prefix: 'inventory',
+    action: 'SEARCH_INVENTORY',
+    key: 'products',
+    nameField: 'name',
+    label: '產品',
+    prompt: '請輸入有效的品名或料號。',
+    renderResults: inventoryResults
   }));
-  app.querySelector('#tenderSearch')?.addEventListener('submit', searchTenders);
+  app.querySelector('#tenderSearch')?.addEventListener('submit', (event) => searchRecords(event, {
+    prefix: 'tender',
+    action: 'SEARCH_TENDER',
+    key: 'tenders',
+    nameField: 'x_name',
+    label: '標案',
+    prompt: '請輸入標案名稱或編號。',
+    renderResults: tenderResults
+  }));
   app.querySelector('#dataForm')?.addEventListener('submit', submitForm);
 }
 
-function filterMachines(query = '', status = document.querySelector('.filter.active')?.dataset.filter || 'all') {
-  const list = app.querySelector('#machineList');
-  const keyword = query.toLowerCase();
-  const filtered = machines.filter((m) => (status === 'all' || m.status === status) && `${m.code} ${m.keeper} ${m.company}`.toLowerCase().includes(keyword));
-  list.innerHTML = filtered.length ? filtered.map((m) => `<article class="record-card"><div><strong>${m.code}</strong><p>${m.company} · 目前保管人：${m.keeper}</p><small>開始日期 ${m.startedAt}</small></div><span class="pill">${m.status}</span></article>`).join('') : '<p class="empty">沒有符合的機台資料。</p>';
-}
-
-async function searchTenders(event) {
+async function searchRecords(event, { prefix, action, key, nameField, label, prompt, renderResults }) {
   event.preventDefault();
   const form = event.currentTarget;
   const submit = form.querySelector('button[type="submit"]');
   if (submit.disabled) return;
 
-  const status = app.querySelector('#tenderStatus');
-  const results = app.querySelector('#tenderResults');
+  const status = app.querySelector(`#${prefix}Status`);
+  const results = app.querySelector(`#${prefix}Results`);
   const keyword = form.elements.namedItem('keyword').value.trim();
+  const inventory = action === 'SEARCH_INVENTORY';
+  const warehouse = inventory ? form.elements.namedItem('warehouse').value : null;
   results.replaceChildren();
-  if (!keyword) {
-    status.textContent = '請輸入標案名稱或編號。';
+  if (inventory && !CONFIG.inventoryWarehouses.some(({ code }) => code === warehouse)) {
+    status.textContent = '請選擇要查詢的倉庫。';
+    return;
+  }
+  if (!keyword || (inventory && (keyword.length > 80 || !/[^%_\s]/u.test(keyword)))) {
+    status.textContent = prompt;
     return;
   }
 
   submit.disabled = true;
   status.textContent = '查詢中…';
   try {
-    const { tenders } = await callApi('SEARCH_TENDER', {
+    const response = await callApi(action, {
       auth: { idToken: profile.idToken, lineUserId: profile.lineUserId },
-      data: { keyword }
+      data: inventory ? { keyword, warehouse } : { keyword }
     });
-    if (!Array.isArray(tenders) || tenders.some((record) => typeof record?.x_name !== 'string')) {
-      throw new Error('系統回傳的標案資料格式不正確，請稍後再試。');
+    const records = response[key];
+    if (!Array.isArray(records) || records.some((record) => typeof record?.[nameField] !== 'string')) {
+      throw new Error(`系統回傳的${label}資料格式不正確，請稍後再試。`);
     }
-    results.innerHTML = tenderResults(tenders);
-    status.textContent = tenders.length ? `找到 ${tenders.length} 筆標案。` : '找不到符合的標案。';
+    if (inventory && (response.warehouse?.code !== warehouse ||
+      typeof response.warehouse.name !== 'string' || !response.warehouse.name.trim())) {
+      throw new Error('系統回傳的倉庫與查詢不符，請稍後再試。');
+    }
+
+    results.innerHTML = renderResults(records);
+    const count = records.length ? `找到 ${records.length} 筆${label}。` : `找不到符合的${label}。`;
+    status.textContent = inventory ? `倉庫：${response.warehouse.name} · ${count}` : count;
   } catch (error) {
     status.textContent = error.message;
   } finally {

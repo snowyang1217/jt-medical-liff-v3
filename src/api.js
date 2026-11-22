@@ -19,6 +19,9 @@ export async function callApi(action, payload = {}) {
   if (response.status === 401) {
     throw new Error('LINE 登入已失效，請從官方帳號重新開啟系統。');
   }
+  if (action === 'SEARCH_INVENTORY' && response.status === 403) {
+    throw new Error('這個 LINE 帳號尚未取得庫存查詢權限。');
+  }
   if (action === 'SEARCH_TENDER' && response.status === 403) {
     throw new Error('這個 LINE 帳號尚未取得標案查詢權限。');
   }
