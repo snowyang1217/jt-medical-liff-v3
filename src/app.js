@@ -1,4 +1,4 @@
-import { getProfile, callApi } from './api.js?v=20261122a';
+import { getProfile, callApi } from './api.js?v=20261122c';
 import { shell, homeView, machineView, tenderView, tenderResults, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261122b';
 import { machines } from './mock-data.js';
 
@@ -114,8 +114,14 @@ async function submitForm(event) {
 
 async function start() {
   app.innerHTML = loadingView();
-  try { profile = await getProfile(); render(launchedPage()); }
-  catch (error) { app.innerHTML = `<div class="fatal"><h1>無法啟動系統</h1><p>${error.message}</p><button onclick="location.reload()">重新整理</button></div>`; }
+  try {
+    profile = await getProfile();
+    if (profile) render(launchedPage());
+  } catch (error) {
+    app.innerHTML = '<div class="fatal"><h1>無法啟動系統</h1><p></p><button type="button">重新整理</button></div>';
+    app.querySelector('.fatal p').textContent = error.message;
+    app.querySelector('.fatal button').addEventListener('click', () => location.reload());
+  }
 }
 window.addEventListener('hashchange', () => {
   const page = location.hash.slice(1) || 'home';
