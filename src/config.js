@@ -5,6 +5,12 @@ export const CONFIG = {
   makeWebhookUrl: 'https://jt-medical-gateway.snowyang1217.workers.dev',
   demoMode: false,
   companyOptions: ['捷旭', '聯友泰'],
+  inventoryWarehouses: [
+    { code: 'A', name: '總倉' },
+    { code: 'A1', name: '北部臨時倉' },
+    { code: 'B', name: '中部倉' },
+    { code: 'C', name: '南部倉' }
+  ],
   navigation: [
     { id: 'home', label: '首頁', icon: '⌂' },
     { id: 'machine', label: '庫存', icon: '▣' },
