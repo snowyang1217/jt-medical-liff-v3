@@ -1,12 +1,12 @@
 import { CONFIG } from './config.js?v=20261118d';
-import { machines, tenders, products, hospitals, employees } from './mock-data.js';
+import { machines, products, hospitals, employees } from './mock-data.js';
 
 const html = String.raw;
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (char) => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[char]));
 const statusClass = (status) => status === '在庫' ? 'green' : status === '維修中' ? 'orange' : status === '已拒絕' ? 'red' : 'blue';
 const select = (id, label, options, required = true) => html`<label class="field"><span>${label}${required ? '<b>＊</b>' : ''}</span><select id="${id}" ${required ? 'required' : ''}><option value="">請選擇</option>${options.map((x) => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('')}</select></label>`;
 
-export function shell(profile, page, content) {
+export function shell(profile, page, content, availablePages) {
   return html`
     <main class="app-shell">
       <header class="topbar">
@@ -14,23 +14,25 @@ export function shell(profile, page, content) {
         <div class="user-chip"><span>${escapeHtml(profile.company)}</span><strong>${escapeHtml(profile.name)}</strong></div>
       </header>
       <section class="page">${content}</section>
-      <nav class="tabbar">${CONFIG.navigation.map((item) => `<button class="tab ${page === item.id ? 'active' : ''}" data-page="${item.id}"><i>${item.icon}</i><span>${item.label}</span></button>`).join('')}</nav>
+      <nav class="tabbar">${CONFIG.navigation.filter(({ id }) => availablePages.has(id)).map((item) => `<button class="tab ${page === item.id ? 'active' : ''}" data-page="${item.id}"><i>${item.icon}</i><span>${item.label}</span></button>`).join('')}</nav>
     </main>`;
 }
 
-export function homeView(profile) {
+export function homeView(profile, availablePages) {
   const modules = [
     ['machine','產品／庫存查詢','查詢產品、庫存與機台狀態','▣'],
     ['forecast','我的訂貨預估','填寫預估月份、產品與數量','▱'],
-    ['tender','標案查詢','掌握標案狀態與截止日','◫'],
+    ['tender','標案查詢','搜尋標案名稱或編號','◫'],
     ['transfer','機台交接','提出交接、確認接收','⇄'],
     ['report','我的業績','查詢本月業績與紀錄','▤'],
     ['performance','跟刀業績輸入','登錄產品、數量與業績','◈']
   ];
   return html`
     <div class="greeting"><p>您好，${escapeHtml(profile.name)}</p><h1>今天要處理什麼？</h1><small>${escapeHtml(profile.role)} · ${escapeHtml(profile.company)}</small></div>
-    <section class="module-grid">${modules.map(([id,title,desc,icon]) => html`<button class="module-card" data-page="${id}"><i>${icon}</i><strong>${title}</strong><small>${desc}</small><span>→</span></button>`).join('')}</section>
-    <section class="notice"><strong>今日提醒</strong><p>請確認機台交接與本月訂貨預估是否已送出。</p></section>`;
+    <section class="module-grid">${modules.map(([id,title,desc,icon]) => availablePages.has(id)
+      ? html`<button class="module-card" data-page="${id}"><i>${icon}</i><strong>${title}</strong><small>${desc}</small><span>→</span></button>`
+      : html`<button class="module-card" disabled><i>${icon}</i><strong>${title}</strong><small>本次測試暫未開放</small></button>`).join('')}</section>
+    <section class="notice"><strong>客戶測試版</strong><p>本次開放標案名稱與編號搜尋。</p></section>`;
 }
 
 export function machineView() {
@@ -41,7 +43,20 @@ export function machineView() {
 }
 function machineCard(m) { return html`<article class="record-card" data-machine="${escapeHtml(m.code)}" data-status="${m.status}"><div><strong>${escapeHtml(m.code)}</strong><p>${escapeHtml(m.company)} · 目前保管人：${escapeHtml(m.keeper)}</p><small>開始日期 ${m.startedAt}</small></div><span class="pill ${statusClass(m.status)}">${escapeHtml(m.status)}</span></article>`; }
 
-export function tenderView() { return html`<div class="page-head"><button class="back" data-page="home">‹</button><div><p>標案管理</p><h1>標案查詢</h1></div></div><section class="list">${tenders.map((t) => html`<article class="record-card"><div><strong>${t.name}</strong><p>截止日 ${t.deadline}</p><small>預估金額 NT$ ${t.amount.toLocaleString()}</small></div><span class="pill ${statusClass(t.status)}">${t.status}</span></article>`).join('')}</section>`; }
+export function tenderView() {
+  return html`
+    <div class="page-head"><button class="back" data-page="home" aria-label="回首頁">‹</button><div><p>標案管理</p><h1>標案查詢</h1></div></div>
+    <form id="tenderSearch" role="search">
+      <label class="field"><span>標案名稱或編號</span><input name="keyword" type="search" placeholder="輸入關鍵字" required /></label>
+      <button class="primary" type="submit">查詢標案</button>
+    </form>
+    <p id="tenderStatus" class="empty" role="status"></p>
+    <section class="list" id="tenderResults" aria-label="標案查詢結果"></section>`;
+}
+
+export function tenderResults(records) {
+  return records.map(({ x_name: name }) => html`<article class="record-card"><strong>${escapeHtml(name)}</strong></article>`).join('');
+}
 
 export function formView(kind, profile) {
   const forms = {
