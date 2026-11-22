@@ -1,9 +1,8 @@
-import { CONFIG } from './config.js?v=20261118d';
+import { CONFIG } from './config.js?v=20261122e';
 import { machines, products, hospitals, employees } from './mock-data.js';
 
 const html = String.raw;
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (char) => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[char]));
-const statusClass = (status) => status === '在庫' ? 'green' : status === '維修中' ? 'orange' : status === '已拒絕' ? 'red' : 'blue';
 const select = (id, label, options, required = true) => html`<label class="field"><span>${label}${required ? '<b>＊</b>' : ''}</span><select id="${id}" ${required ? 'required' : ''}><option value="">請選擇</option>${options.map((x) => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('')}</select></label>`;
 
 export function shell(profile, page, content, availablePages) {
@@ -20,7 +19,7 @@ export function shell(profile, page, content, availablePages) {
 
 export function homeView(profile, availablePages) {
   const modules = [
-    ['machine','產品／庫存查詢','查詢產品、庫存與機台狀態','▣'],
+    ['machine','產品／庫存查詢','依品名或料號查詢庫存','▣'],
     ['forecast','我的訂貨預估','填寫預估月份、產品與數量','▱'],
     ['tender','標案查詢','搜尋標案名稱或編號','◫'],
     ['transfer','機台交接','提出交接、確認接收','⇄'],
@@ -32,16 +31,35 @@ export function homeView(profile, availablePages) {
     <section class="module-grid">${modules.map(([id,title,desc,icon]) => availablePages.has(id)
       ? html`<button class="module-card" data-page="${id}"><i>${icon}</i><strong>${title}</strong><small>${desc}</small><span>→</span></button>`
       : html`<button class="module-card" disabled><i>${icon}</i><strong>${title}</strong><small>本次測試暫未開放</small></button>`).join('')}</section>
-    <section class="notice"><strong>客戶測試版</strong><p>本次開放標案名稱與編號搜尋。</p></section>`;
+    <section class="notice"><strong>客戶測試版</strong><p>可查詢標案與產品庫存。</p></section>`;
 }
 
-export function machineView() {
-  return html`<div class="page-head"><button class="back" data-page="home">‹</button><div><p>產品、庫存與機台管理</p><h1>產品／庫存查詢</h1></div></div>
-  <input class="search" id="machineSearch" placeholder="搜尋機台編號或保管人" />
-  <div class="filter-row"><button class="filter active" data-filter="all">全部</button><button class="filter" data-filter="在庫">在庫</button><button class="filter" data-filter="保管中">保管中</button><button class="filter" data-filter="維修中">維修中</button></div>
-  <section class="list" id="machineList">${machines.map(machineCard).join('')}</section>`;
+export function inventoryView() {
+  return html`
+    <div class="page-head"><button class="back" data-page="home" aria-label="回首頁">‹</button><div><h1>產品／庫存查詢</h1></div></div>
+    <form id="inventorySearch" role="search">
+      <label class="field"><span>品名或料號</span><input name="keyword" type="search" placeholder="輸入品名或料號" maxlength="80" required /></label>
+      <button class="primary" type="submit">查詢庫存</button>
+    </form>
+    <p id="inventoryStatus" class="empty" role="status"></p>
+    <section class="list" id="inventoryResults" aria-label="產品庫存查詢結果"></section>`;
 }
-function machineCard(m) { return html`<article class="record-card" data-machine="${escapeHtml(m.code)}" data-status="${m.status}"><div><strong>${escapeHtml(m.code)}</strong><p>${escapeHtml(m.company)} · 目前保管人：${escapeHtml(m.keeper)}</p><small>開始日期 ${m.startedAt}</small></div><span class="pill ${statusClass(m.status)}">${escapeHtml(m.status)}</span></article>`; }
+
+const stockQuantityFormat = new Intl.NumberFormat('zh-TW', { maximumSignificantDigits: 12 });
+
+export function inventoryResults(records) {
+  return records.map(({ name, default_code: code, uom_id: unit, qty_available: onHand, free_qty: free }) => {
+    const unitName = Array.isArray(unit) && typeof unit[1] === 'string' && unit[1].trim() ? ` ${escapeHtml(unit[1])}` : '';
+    const format = (quantity) => Number.isFinite(quantity) ? `${stockQuantityFormat.format(quantity)}${unitName}` : '無資料';
+
+    return html`<article class="record-card"><div>
+      <strong>${escapeHtml(name)}</strong>
+      <p>料號　${typeof code === 'string' && code.trim() ? escapeHtml(code) : '未填寫'}</p>
+      <p>在手量　${format(onHand)}</p>
+      <p>可用量　${format(free)}</p>
+    </div></article>`;
+  }).join('');
+}
 
 export function tenderView() {
   return html`
