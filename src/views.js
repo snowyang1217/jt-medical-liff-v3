@@ -54,8 +54,28 @@ export function tenderView() {
     <section class="list" id="tenderResults" aria-label="標案查詢結果"></section>`;
 }
 
+const tenderAmountFormat = new Intl.NumberFormat('zh-TW');
+
 export function tenderResults(records) {
-  return records.map(({ x_name: name }) => html`<article class="record-card"><strong>${escapeHtml(name)}</strong></article>`).join('');
+  return records.map(({
+    x_name: name,
+    x_studio_date_1: deadline,
+    x_studio_selection_1: status,
+    x_studio_twd: amount
+  }) => {
+    const deadlineText = typeof deadline === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(deadline)
+      ? deadline.replaceAll('-', '/')
+      : '未填寫';
+    const statusText = typeof status === 'string' && status.trim() ? status : '未填寫';
+    const amountText = Number.isFinite(amount) ? `NT$ ${tenderAmountFormat.format(amount)}` : '未填寫';
+
+    return html`<article class="record-card">
+      <strong>${escapeHtml(name)}</strong>
+      <p>截止日期　${deadlineText}</p>
+      <p>標案狀態　${escapeHtml(statusText)}</p>
+      <p>預估金額　${amountText}</p>
+    </article>`;
+  }).join('');
 }
 
 export function formView(kind, profile) {
