@@ -7,7 +7,7 @@ export const CONFIG = {
   companyOptions: ['捷旭', '聯友泰'],
   navigation: [
     { id: 'home', label: '首頁', icon: '⌂' },
-    { id: 'machine', label: '機台', icon: '▣' },
+    { id: 'machine', label: '庫存', icon: '▣' },
     { id: 'record', label: '填報', icon: '+' },
     { id: 'profile', label: '我的', icon: '◉' }
   ]
