@@ -1,8 +1,8 @@
 import { getProfile, callApi } from './api.js?v=20261123b';
-import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261123b';
+import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261123g';
 
-import { CONFIG } from './config.js?v=20261123d';
-import { operationView, bindOperation } from './operations.js?v=20261123e';
+import { CONFIG } from './config.js?v=20261123g';
+import { operationView, bindOperation } from './operations.js?v=20261123g';
 
 const app = document.querySelector('#app');
 let profile = null;

@@ -55,6 +55,24 @@ LINE 驗收後，在 `CONFIG.operationPages` 加入對應頁面代碼
 `quantity, status, note`。跟刀業績另有 `hospital, quantity, amount`。
 交接紀錄另有 `sender, receiver, status, note, canRespond`。
 
+### 我的機台交接紀錄
+
+接收 `LIST_OWN_RECORDS` 且 `model=transfer` 後，沿用 LINE 員工對照與授權流程。
+以 Odoo 的 `x_1213/search_read` 查詢：
+
+- 公司 `x_studio_selection_1` 等於後端對照的公司代碼。
+- `x_studio_many2one_2`（交接人）或 `x_studio_many2one_3`（接收人）等於後端對照的員工 ID。
+- 依 `id desc` 排序，最多取 51 筆。下一頁傳入正整數字串 `cursor`，查詢再加入 `id < cursor`。
+
+回傳 `{ok: true, transfers: [...]}`，保留 Odoo 陣列格式。需讀取 `id`、`x_name`、
+`x_studio_many2one_1`（機台）、`x_studio_many2one_2`、`x_studio_many2one_3`、
+`x_studio_many2one_4`（目前保管人）、`x_studio_date_3`（預計交接日期）、
+`x_studio_selection_2`（狀態）、`x_studio_text_1`（拒絕原因）、`x_studio_text_2`（備註）。
+前端顯示 50 筆，第 51 筆用於判斷是否顯示「載入更多」。
+
+第一階段頁面只提供查詢。正式 LINE 驗收時，用交接人、接收人與無關帳號各測一次，
+並確認其他公司的紀錄無法讀取。查詢路由備妥後才啟用 `transfer` 頁面。
+
 ### 後端資料對照與驗收
 
 - 以 Worker 驗證後的 LINE ID 做授權，再以伺服端對照取得 Odoo 員工 ID 與所屬公司。
