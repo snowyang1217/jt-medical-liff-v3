@@ -46,7 +46,8 @@ function recordsView(page) {
   </section>`;
 }
 
-export function operationView(page, profile) {
+export function operationView(page, profile, { allowTransferWrites = false } = {}) {
+  const readOnly = page === 'transfer' && !allowTransferWrites;
   const fields = {
     forecast: input('month', '預估月份', 'month', `value="${currentMonth()}"`)
       + lookup('productId', '產品') + input('quantity', '預估數量', 'number', 'min="0" step="any"'),
@@ -57,9 +58,9 @@ export function operationView(page, profile) {
       + input('quantity', '數量', 'number', 'min="0" step="any"')
       + input('amount', '業績金額（TWD）', 'number', 'min="0" step="0.01"')
   };
-  return `<section data-operation="${page}">
+  return `<section data-operation="${page}"${readOnly ? ' data-read-only' : ''}>
     <div class="page-head"><button class="back" data-page="home" aria-label="回首頁">‹</button><div><h1>${titles[page]}</h1></div></div>
-    ${page === 'report' ? '' : `<form data-entry>
+    ${page === 'report' || readOnly ? '' : `<form data-entry>
       <p>填報人　${escapeHtml(profile.name)}</p>
       ${fields[page]}
       <label class="field"><span>備註</span><textarea name="note" maxlength="1000"></textarea></label>
@@ -153,7 +154,7 @@ function bindLookup(box, request, page) {
   return () => { clear(); status.textContent = ''; };
 }
 
-function recordCard(page, row) {
+function recordCard(page, row, readOnly) {
   const title = escapeHtml(row.label);
   const date = escapeHtml(row.date || '');
   const note = row.note ? `<p>${escapeHtml(row.note)}</p>` : '';
@@ -165,8 +166,10 @@ function recordCard(page, row) {
     <p>業績金額　${amountFormat.format(row.amount)}</p></div></article>`;
   return `<article class="record-card"><div><strong>${title}</strong><p>預計交接日期　${date}</p>
     <p>交接人　${escapeHtml(row.sender)}　接收人　${escapeHtml(row.receiver)}</p>
+    ${row.custodian ? `<p>目前保管人　${escapeHtml(row.custodian)}</p>` : ''}
     <p data-transfer-status>交接狀態　${escapeHtml(row.status)}</p>${note}
-    ${row.canRespond === true && row.status === '待確認' ? `<form data-response="${row.id}">
+    ${row.rejectionReason ? `<p>拒絕原因　${escapeHtml(row.rejectionReason)}</p>` : ''}
+    ${!readOnly && row.canRespond === true && row.status === '待確認' ? `<form data-response="${row.id}">
       <label class="field"><span>拒絕原因</span><textarea name="reason" maxlength="1000"></textarea></label>
       <button type="submit" class="secondary" name="decision" value="accept">確認接收</button>
       <button type="submit" class="secondary" name="decision" value="reject">拒絕交接</button>
@@ -193,7 +196,24 @@ function forecastRecords(result) {
   return { records, nextCursor: result.forecasts.length > 50 ? String(records[49].id) : null };
 }
 
+function transferRecords(result) {
+  if (!Array.isArray(result.transfers)) return result;
+  const records = result.transfers.slice(0, 50).map((row) => ({
+    id: row?.id,
+    label: row?.x_studio_many2one_1?.[1] || row?.x_name,
+    date: row?.x_studio_date_3,
+    sender: row?.x_studio_many2one_2?.[1],
+    receiver: row?.x_studio_many2one_3?.[1],
+    custodian: row?.x_studio_many2one_4?.[1],
+    status: row?.x_studio_selection_2 || '未設定',
+    rejectionReason: row?.x_studio_text_1,
+    note: row?.x_studio_text_2
+  }));
+  return { records, nextCursor: result.transfers.length > 50 ? String(records[49].id) : null };
+}
+
 function bindRecords(root, request, page) {
+  const readOnly = root.hasAttribute('data-read-only');
   const form = root.querySelector('[data-records]');
   if (!form) return;
   const submit = form.querySelector('button');
@@ -226,7 +246,8 @@ function bindRecords(root, request, page) {
       const result = await request('LIST_OWN_RECORDS', {
         model, data: { ...(month ? { month } : {}), ...(more ? { cursor } : {}) }
       });
-      const { records, nextCursor, totalAmount } = page === 'forecast' ? forecastRecords(result) : result;
+      const { records, nextCursor, totalAmount } = page === 'forecast' ? forecastRecords(result)
+        : page === 'transfer' ? transferRecords(result) : result;
       if (!Array.isArray(records) || records.some((row) => !validRow(page, row))
         || (nextCursor != null && (typeof nextCursor !== 'string' || !nextCursor))
         || (page === 'report' && !Number.isFinite(totalAmount))) {
@@ -238,7 +259,7 @@ function bindRecords(root, request, page) {
       const summary = page === 'report' && !more
         ? `<p class="notice">${escapeHtml(month)} 跟刀業績合計　<strong>${amountFormat.format(totalAmount)}</strong></p>`
         : '';
-      list.insertAdjacentHTML('beforeend', summary + records.map((row) => recordCard(page, row)).join(''));
+      list.insertAdjacentHTML('beforeend', summary + records.map((row) => recordCard(page, row, readOnly)).join(''));
       status.textContent = !more && !records.length ? '查無紀錄。' : '';
     } catch (error) {
       status.textContent = error.message;
@@ -254,7 +275,7 @@ function bindRecords(root, request, page) {
   form.elements.namedItem('month')?.addEventListener('change', () => { next.hidden = true; });
   list.addEventListener('submit', async (event) => {
     const action = event.target.closest('[data-response]');
-    if (!action) return;
+    if (!action || readOnly) return;
     event.preventDefault();
     if (action.dataset.pending || !event.submitter) return;
     const decision = event.submitter.value;
