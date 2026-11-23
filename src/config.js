@@ -5,7 +5,7 @@ export const CONFIG = {
   makeWebhookUrl: 'https://jt-medical-gateway.snowyang1217.workers.dev',
   demoMode: false,
   // Enable each route after its live Gateway and Make flows have been verified.
-  operationPages: [],
+  operationPages: ['forecast'],
   companyOptions: ['捷旭', '聯友泰'],
   navigation: [
     { id: 'home', label: '首頁', icon: '⌂' },
