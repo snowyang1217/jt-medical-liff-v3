@@ -60,9 +60,9 @@ export function operationView(page, profile, { allowTransferWrites = false } = {
   };
   return `<section data-operation="${page}"${readOnly ? ' data-read-only' : ''}>
     <div class="page-head"><button class="back" data-page="home" aria-label="回首頁">‹</button><div><h1>${titles[page]}</h1></div></div>
-    ${page === 'report' || readOnly ? '' : `<form data-entry>
+    ${page === 'report' || readOnly ? '' : `<form data-entry${page === 'transfer' ? ' hidden' : ''}>
       ${page === 'transfer' ? '<h2>新增交接申請</h2>' : ''}
-      <p>${page === 'transfer' ? '交接人' : '填報人'}　${escapeHtml(profile.name)}</p>
+      <p>${page === 'transfer' ? '交接人　<span data-transfer-sender></span>' : `填報人　${escapeHtml(profile.name)}`}</p>
       ${fields[page]}
       <label class="field"><span>備註</span><textarea name="note" maxlength="1000"></textarea></label>
       <button class="primary" type="submit">${page === 'transfer' ? '送出交接申請' : '確認送出'}</button>
@@ -263,6 +263,13 @@ function bindRecords(root, request, page) {
         || (nextCursor != null && (typeof nextCursor !== 'string' || !nextCursor))
         || (page === 'report' && !Number.isFinite(totalAmount))) {
         throw new Error('查詢結果格式不正確，請稍後再試。');
+      }
+      if (page === 'transfer' && typeof result.senderName === 'string' && result.senderName.trim()) {
+        const entry = root.querySelector('[data-entry]');
+        if (entry) {
+          entry.querySelector('[data-transfer-sender]').textContent = result.senderName;
+          entry.hidden = false;
+        }
       }
       loadedMonth = month;
       cursor = nextCursor || null;
