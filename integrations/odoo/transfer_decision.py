@@ -8,6 +8,9 @@ reason = context.get("line_transfer_reason", "")
 
 if context.get("active_model") != "x_1213" or len(records) != 1:
     raise UserError("請選擇一筆機台交接紀錄。")
+# This server action is deployed only for Amy_test on transfer #17.
+if records.ids != [17] or context.get("active_id") != 17 or employee_id != 3:
+    raise UserError("這筆交接未開放 LINE 試用。")
 if (
     not isinstance(employee_id, int) or isinstance(employee_id, bool) or employee_id < 1
     or not isinstance(company_id, int) or isinstance(company_id, bool) or company_id < 1
