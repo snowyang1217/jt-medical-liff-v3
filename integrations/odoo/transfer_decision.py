@@ -6,6 +6,8 @@ company_key = context.get("line_transfer_company")
 decision = context.get("line_transfer_decision")
 reason = context.get("line_transfer_reason", "")
 
+if not env.user.has_group("base.group_system"):
+    raise UserError("請使用已授權的 Odoo 整合帳號。")
 if context.get("active_model") != "x_1213" or len(records) != 1:
     raise UserError("請選擇一筆機台交接紀錄。")
 # This server action is deployed only for Amy_test on transfer #17.
@@ -37,6 +39,8 @@ receiver = transfer.x_studio_many2one_3
 if (
     receiver.id != employee_id or not receiver.active
     or receiver.company_id.id != company_id
+    or not receiver.x_studio_char_2
+    or receiver.x_studio_char_2 != context.get("line_verified_user_id")
     or transfer.x_studio_selection_1 != company_key
 ):
     raise UserError("只有這筆交接的接收人可處理。")
