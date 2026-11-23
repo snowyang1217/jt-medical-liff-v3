@@ -1,4 +1,4 @@
-import { callApi } from './api.js?v=20261123b';
+import { callApi } from './api.js?v=20261123f';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
