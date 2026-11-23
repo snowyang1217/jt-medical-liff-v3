@@ -77,6 +77,12 @@ LINE 驗收後，在 `CONFIG.operationPages` 加入對應頁面代碼
 
 ### 確認接收與拒絕交接
 
+正式驗收先限 `Amy_test`（員工 #3）處理交接單 #17。Odoo 已儲存名為
+「LINE 機台交接驗收 #17」的伺服器動作，尚未接上 LINE。啟用前先確認 Amy_test
+有核對過的 LINE User ID，且與 Jacky_test 的綁定不同。Make 只可將 Worker 驗證後
+的 LINE ID 傳入動作的 `line_verified_user_id`，供 Odoo 與員工紀錄交叉比對。
+此驗收動作要求既有 Odoo 系統管理員執行權限，且只接受 Amy_test 與 #17 的組合。
+
 Make 先比對 Worker 驗證的 LINE 識別碼與啟用中的員工，再以這個員工身分查詢交接單。
 禁止採用前端申報的員工編號或公司。只對本人為接收人的交接單呼叫
 [`integrations/odoo/transfer_decision.py`](integrations/odoo/transfer_decision.py) 的 Odoo 伺服器動作。
