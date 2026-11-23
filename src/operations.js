@@ -125,8 +125,16 @@ function bindLookup(box, request, page) {
       return;
     }
     void withStatus(button, status, '查詢中…', async () => {
-      const { options } = await request('SEARCH_REFERENCES', { model: page, data: { field: box.dataset.lookup, keyword } });
+      const result = await request('SEARCH_REFERENCES', { model: page, data: { field: box.dataset.lookup, keyword } });
       if (search.value.trim() !== keyword) return;
+      const options = page === 'forecast' && Array.isArray(result.products)
+        ? result.products.map((product) => ({
+          id: product?.id,
+          label: typeof product?.name === 'string'
+            ? [product.name, product.default_code || ''].filter(Boolean).join(' · ')
+            : null
+        }))
+        : result.options;
       if (!Array.isArray(options) || options.some((item) => !isId(item?.id) || typeof item.label !== 'string')) {
         throw new Error('查詢結果格式不正確，請稍後再試。');
       }
@@ -172,6 +180,19 @@ function validRow(page, row) {
   return Number.isFinite(row.quantity) && (page !== 'report' || Number.isFinite(row.amount));
 }
 
+function forecastRecords(result) {
+  if (!Array.isArray(result.forecasts)) return result;
+  const records = result.forecasts.slice(0, 50).map((row) => ({
+    id: row?.id,
+    label: row?.x_studio_many2one_4?.[1] || row?.x_name,
+    date: row?.x_studio_date_1,
+    quantity: row?.x_studio_float_1,
+    status: row?.x_studio_selection_1,
+    note: row?.x_studio_text_1
+  }));
+  return { records, nextCursor: result.forecasts.length > 50 ? String(records[49].id) : null };
+}
+
 function bindRecords(root, request, page) {
   const form = root.querySelector('[data-records]');
   if (!form) return;
@@ -205,7 +226,7 @@ function bindRecords(root, request, page) {
       const result = await request('LIST_OWN_RECORDS', {
         model, data: { ...(month ? { month } : {}), ...(more ? { cursor } : {}) }
       });
-      const { records, nextCursor, totalAmount } = result;
+      const { records, nextCursor, totalAmount } = page === 'forecast' ? forecastRecords(result) : result;
       if (!Array.isArray(records) || records.some((row) => !validRow(page, row))
         || (nextCursor != null && (typeof nextCursor !== 'string' || !nextCursor))
         || (page === 'report' && !Number.isFinite(totalAmount))) {
