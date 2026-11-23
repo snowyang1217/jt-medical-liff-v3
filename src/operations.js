@@ -60,11 +60,12 @@ export function operationView(page, profile, { allowTransferWrites = false } = {
   };
   return `<section data-operation="${page}"${readOnly ? ' data-read-only' : ''}>
     <div class="page-head"><button class="back" data-page="home" aria-label="回首頁">‹</button><div><h1>${titles[page]}</h1></div></div>
-    ${page === 'report' || readOnly ? '' : `<form data-entry>
-      <p>填報人　${escapeHtml(profile.name)}</p>
+    ${page === 'report' || readOnly ? '' : `<form data-entry${page === 'transfer' ? ' hidden' : ''}>
+      ${page === 'transfer' ? '<h2>新增交接申請</h2>' : ''}
+      <p>${page === 'transfer' ? '交接人　<span data-transfer-sender></span>' : `填報人　${escapeHtml(profile.name)}`}</p>
       ${fields[page]}
       <label class="field"><span>備註</span><textarea name="note" maxlength="1000"></textarea></label>
-      <button class="primary" type="submit">確認送出</button>
+      <button class="primary" type="submit">${page === 'transfer' ? '送出交接申請' : '確認送出'}</button>
       <p class="empty" role="status"></p>
     </form>`}
     ${recordsView(page)}
@@ -74,6 +75,14 @@ export function operationView(page, profile, { allowTransferWrites = false } = {
 export function entryValues(page, values) {
   const note = values.note.trim();
   if (page === 'forecast' && !isMonth(values.month)) throw new Error('請選擇正確的預估月份。');
+  if (page === 'transfer') {
+    const date = values.plannedDate;
+    const timestamp = Date.parse(date);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(timestamp)
+      || new Date(timestamp).toISOString().slice(0, 10) !== date || date.startsWith('0000')) {
+      throw new Error('請選擇正確的預計交接日期。');
+    }
+  }
   const data = { note };
   for (const [name, value] of Object.entries(values)) {
     if (name.endsWith('Id')) {
@@ -135,7 +144,9 @@ function bindLookup(box, request, page) {
             ? [product.name, product.default_code || ''].filter(Boolean).join(' · ')
             : null
         }))
-        : result.options;
+        : page === 'transfer' && Array.isArray(result.references)
+          ? result.references.map((item) => ({ id: item?.id, label: item?.name || item?.x_name }))
+          : result.options;
       if (!Array.isArray(options) || options.some((item) => !isId(item?.id) || typeof item.label !== 'string')) {
         throw new Error('查詢結果格式不正確，請稍後再試。');
       }
@@ -253,6 +264,13 @@ function bindRecords(root, request, page) {
         || (page === 'report' && !Number.isFinite(totalAmount))) {
         throw new Error('查詢結果格式不正確，請稍後再試。');
       }
+      if (page === 'transfer' && typeof result.senderName === 'string' && result.senderName.trim()) {
+        const entry = root.querySelector('[data-entry]');
+        if (entry) {
+          entry.querySelector('[data-transfer-sender]').textContent = result.senderName;
+          entry.hidden = false;
+        }
+      }
       loadedMonth = month;
       cursor = nextCursor || null;
       next.hidden = !cursor;
@@ -364,7 +382,8 @@ export function bindOperation(root, profile, api = callApi) {
       requestId = undefined;
       form.reset();
       resetLookups.forEach((reset) => reset());
-      const message = outcome === 'unchanged' ? '已有相同數量的預估'
+      const message = page === 'transfer' ? '已送出交接申請'
+        : outcome === 'unchanged' ? '已有相同數量的預估'
         : outcome === 'quantity_updated' ? '已修正原預估數量' : '已送出';
       status.textContent = `${message}，紀錄編號 ${recordId}。`;
       void reloadRecords?.();
