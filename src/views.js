@@ -1,9 +1,8 @@
-import { CONFIG } from './config.js?v=20261123a';
-import { machines, products, hospitals, employees } from './mock-data.js';
+import { CONFIG } from './config.js?v=20261123b';
+import { products } from './mock-data.js';
 
 const html = String.raw;
 const escapeHtml = (value = '') => String(value).replace(/[&<>'"]/g, (char) => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[char]));
-const select = (id, label, options, required = true) => html`<label class="field"><span>${label}${required ? '<b>＊</b>' : ''}</span><select id="${id}" ${required ? 'required' : ''}><option value="">請選擇</option>${options.map((x) => `<option value="${escapeHtml(x)}">${escapeHtml(x)}</option>`).join('')}</select></label>`;
 
 export function shell(profile, page, content, availablePages) {
   return html`
@@ -30,8 +29,8 @@ export function homeView(profile, availablePages) {
     <div class="greeting"><p>您好，${escapeHtml(profile.name)}</p><h1>今天要處理什麼？</h1><small>${escapeHtml(profile.role)} · ${escapeHtml(profile.company)}</small></div>
     <section class="module-grid">${modules.map(([id,title,desc,icon]) => availablePages.has(id)
       ? html`<button class="module-card" data-page="${id}"><i>${icon}</i><strong>${title}</strong><small>${desc}</small><span>→</span></button>`
-      : html`<button class="module-card" disabled><i>${icon}</i><strong>${title}</strong><small>本次測試暫未開放</small></button>`).join('')}</section>
-    <section class="notice"><strong>客戶測試版</strong><p>可查詢標案與產品庫存。</p></section>`;
+      : html`<button class="module-card" disabled><i>${icon}</i><strong>${title}</strong><small>功能尚未開放</small></button>`).join('')}</section>
+`;
 }
 
 export function inventoryView() {
@@ -96,19 +95,8 @@ export function tenderResults(records) {
   }).join('');
 }
 
-export function formView(kind, profile) {
-  const forms = {
-    forecast: ['我的訂貨預估','提交預估採購需求', html`${select('company','所屬公司',CONFIG.companyOptions)}${select('month','預估月份',['2026-12','2027-01','2027-02'])}${select('product','產品',products)}<label class="field"><span>預估數量<b>＊</b></span><input id="quantity" type="number" min="1" placeholder="請輸入數量" required /></label><label class="field"><span>備註</span><textarea id="note" placeholder="可補充採購需求或原因"></textarea></label>`],
-    transfer: ['機台交接','提出機台交接申請', html`${select('company','所屬公司',CONFIG.companyOptions)}${select('machine','交接機台',machines.map((m)=>m.code))}${select('receiver','接收人',employees)}<label class="field"><span>預計交接日期<b>＊</b></span><input id="plannedDate" type="date" required /></label><label class="field"><span>備註</span><textarea id="note" placeholder="交接地點或其他說明"></textarea></label>`],
-    performance: ['跟刀業績輸入','登錄本次跟刀業績', html`${select('company','所屬公司',CONFIG.companyOptions)}${select('hospital','客戶／醫院',hospitals)}${select('product','產品',products)}<label class="field"><span>跟刀日期<b>＊</b></span><input id="serviceDate" type="date" required /></label><label class="field"><span>數量<b>＊</b></span><input id="quantity" type="number" min="1" required /></label><label class="field"><span>業績金額（TWD）<b>＊</b></span><input id="amount" type="number" min="0" required /></label>`]
-  };
-  const [title, subtitle, fields] = forms[kind];
-  return html`<div class="page-head"><button class="back" data-page="home">‹</button><div><p>${subtitle}</p><h1>${title}</h1></div></div><form id="dataForm" data-kind="${kind}">${fields}<div class="fixed-submit"><button class="primary" type="submit">確認送出</button></div></form>`;
-}
-
 export function productView() { return html`<div class="page-head"><button class="back" data-page="home">‹</button><div><p>產品資訊</p><h1>產品介紹</h1></div></div><section class="product-stack">${products.map((p,i) => `<article><span>0${i+1}</span><div><strong>${p}</strong><p>提供產品規格、適用情境與聯絡窗口。</p></div><b>›</b></article>`).join('')}</section>`; }
 
-export function reportView() { return html`<div class="page-head"><button class="back" data-page="home">‹</button><div><p>業績管理</p><h1>我的業績</h1></div></div><section class="list"><article class="record-card"><div><strong>本月業績</strong><p>串接 Odoo 後顯示本月累計金額</p><small>依登入業務人員自動篩選</small></div><span class="pill blue">即將串接</span></article><article class="record-card"><div><strong>我的跟刀紀錄</strong><p>查看本月已輸入的跟刀業績</p><small>可依日期與產品篩選</small></div><span class="pill blue">查詢</span></article></section>`; }
 
 export function profileView(profile) { return html`<div class="profile-card"><span class="avatar">${escapeHtml(profile.name.slice(0,1))}</span><h1>${escapeHtml(profile.name)}</h1><p>${escapeHtml(profile.role)} · ${escapeHtml(profile.company)}</p></div><section class="profile-list"><button>個人資料 <b>›</b></button><button>我的送出紀錄 <b>›</b></button><button>系統說明 <b>›</b></button></section>`; }
 
