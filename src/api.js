@@ -26,6 +26,9 @@ export async function callApi(action, payload = {}) {
     throw new Error('這個 LINE 帳號尚未取得標案查詢權限。');
   }
   if (response.status === 403) throw new Error('這個 LINE 帳號尚未取得此功能的使用權限。');
+  if (response.status === 409 && action === 'CREATE_RECORD' && payload.model === 'forecast') {
+    throw new Error('同月份、同產品有多筆已送出預估，或原預估已變更。請先查看「我的預估紀錄」再試。');
+  }
   if (!response.ok) throw new Error('系統暫時無法連線，請稍後再試。');
   const data = await response.json();
   if (data?.ok !== true) throw new Error(data?.message || '資料處理失敗。');
