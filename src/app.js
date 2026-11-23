@@ -1,10 +1,14 @@
-import { getProfile, callApi } from './api.js?v=20261122e';
-import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, formView, reportView, profileView, recordView, loadingView, toast } from './views.js?v=20261123a';
+import { getProfile, callApi } from './api.js?v=20261123b';
+import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261123b';
+
+import { CONFIG } from './config.js?v=20261123b';
+import { operationView, bindOperation } from './operations.js?v=20261123b';
 
 const app = document.querySelector('#app');
 let profile = null;
 let currentPage = 'home';
-const availablePages = new Set(['home', 'tender', 'machine']);
+const operationPages = new Set(CONFIG.operationPages);
+const availablePages = new Set(['home', 'tender', 'machine', ...operationPages]);
 
 function launchedPage() {
   const directPage = new URLSearchParams(location.search).get('page');
@@ -24,10 +28,7 @@ function contentFor(page) {
   if (page === 'home') return homeView(profile, availablePages);
   if (page === 'machine') return inventoryView();
   if (page === 'tender') return tenderView();
-  if (page === 'report') return reportView();
-  if (page === 'profile') return profileView(profile);
-  if (page === 'record') return recordView();
-  if (['forecast','transfer','performance'].includes(page)) return formView(page, profile);
+  if (operationPages.has(page)) return operationView(page, profile);
   return homeView(profile, availablePages);
 }
 
@@ -59,7 +60,7 @@ function bindEvents() {
     prompt: '請輸入標案名稱或編號。',
     renderResults: tenderResults
   }));
-  app.querySelector('#dataForm')?.addEventListener('submit', submitForm);
+  bindOperation(app.querySelector('[data-operation]'), profile);
 }
 
 async function searchRecords(event, { prefix, action, key, nameField, label, prompt, renderResults }) {
@@ -96,27 +97,6 @@ async function searchRecords(event, { prefix, action, key, nameField, label, pro
   } finally {
     submit.disabled = false;
   }
-}
-
-async function submitForm(event) {
-  event.preventDefault();
-  const form = event.currentTarget;
-  if (!form.reportValidity()) return;
-  const submit = form.querySelector('[type="submit"]'); submit.disabled = true; submit.textContent = '送出中…';
-  const values = Object.fromEntries(new FormData(form).entries());
-  form.querySelectorAll('input, select, textarea').forEach((input) => { if (input.id) values[input.id] = input.value; });
-  try {
-    await callApi('CREATE_RECORD', {
-      model: form.dataset.kind,
-      auth: { idToken: profile.idToken, lineUserId: profile.lineUserId },
-      data: values
-    });
-    document.body.insertAdjacentHTML('beforeend', toast('資料已送出，稍後可在 Odoo 查閱。'));
-    setTimeout(() => document.querySelector('.toast')?.remove(), 2600);
-    form.reset();
-  } catch (error) {
-    document.body.insertAdjacentHTML('beforeend', toast(error.message, 'error'));
-  } finally { submit.disabled = false; submit.textContent = '確認送出'; }
 }
 
 async function start() {

@@ -1,4 +1,4 @@
-import { CONFIG } from './config.js?v=20261119a';
+import { CONFIG } from './config.js?v=20261123b';
 
 const wait = (ms = 280) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -25,6 +25,7 @@ export async function callApi(action, payload = {}) {
   if (action === 'SEARCH_TENDER' && response.status === 403) {
     throw new Error('這個 LINE 帳號尚未取得標案查詢權限。');
   }
+  if (response.status === 403) throw new Error('這個 LINE 帳號尚未取得此功能的使用權限。');
   if (!response.ok) throw new Error('系統暫時無法連線，請稍後再試。');
   const data = await response.json();
   if (data?.ok !== true) throw new Error(data?.message || '資料處理失敗。');
