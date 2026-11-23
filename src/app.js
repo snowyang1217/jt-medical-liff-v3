@@ -1,8 +1,8 @@
 import { getProfile, callApi } from './api.js?v=20261123b';
-import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261123g';
+import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261124a';
 
 import { CONFIG } from './config.js?v=20261123g';
-import { operationView, bindOperation } from './operations.js?v=20261123g';
+import { operationView, bindOperation } from './operations.js?v=20261124a';
 
 const app = document.querySelector('#app');
 let profile = null;
@@ -28,7 +28,7 @@ function contentFor(page) {
   if (page === 'home') return homeView(profile, availablePages);
   if (page === 'machine') return inventoryView();
   if (page === 'tender') return tenderView();
-  if (operationPages.has(page)) return operationView(page, profile);
+  if (operationPages.has(page)) return operationView(page, profile, { allowTransferWrites: page === 'transfer' });
   return homeView(profile, availablePages);
 }
 
