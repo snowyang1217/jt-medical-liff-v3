@@ -287,6 +287,34 @@ function bindRecords(root, request, page) {
   return load;
 }
 
+async function submitForecast(send, values) {
+  const result = await send(values);
+  if (result.outcome !== 'confirm_quantity') return result;
+
+  const { recordId, existingQuantity, revision } = result;
+  if (!isId(recordId) || !Number.isFinite(existingQuantity) || typeof revision !== 'string' || !revision) {
+    throw new Error('目前無法確認原預估資料，請重新查詢。');
+  }
+
+  const current = quantityFormat.format(existingQuantity);
+  const proposed = quantityFormat.format(values.quantity);
+  const confirmed = window.confirm(
+    `你曾送出相同產品與月份的訂貨預估。\n原數量：${current}\n新數量：${proposed}\n確定要修正原紀錄嗎？`
+  );
+  if (!confirmed) return null;
+
+  const updated = await send({
+    ...values,
+    replaceRecordId: recordId,
+    expectedQuantity: existingQuantity,
+    expectedRevision: revision
+  });
+  if (updated.outcome === 'confirm_quantity') {
+    throw new Error('原預估在確認期間已變更，請重新送出並確認最新數量。');
+  }
+  return updated;
+}
+
 export function bindOperation(root, profile, api = callApi) {
   if (!root) return;
   const page = root.dataset.operation;
@@ -304,12 +332,20 @@ export function bindOperation(root, profile, api = callApi) {
     void withStatus(button, status, '送出中…', async () => {
       const values = entryValues(page, Object.fromEntries(new FormData(form)));
       requestId = createRequestId(requestId, values);
-      const { recordId } = await request('CREATE_RECORD', { model: page, data: { ...values, requestId: requestId.id } });
+      const send = (data) => request('CREATE_RECORD', { model: page, data: { ...data, requestId: requestId.id } });
+      const result = page === 'forecast' ? await submitForecast(send, values) : await send(values);
+      if (result === null) {
+        status.textContent = '已取消修正，表單內容已保留。';
+        return;
+      }
+      const { recordId, outcome } = result;
       if (!isId(recordId)) throw new Error('目前無法確認是否寫入，請先查詢紀錄再重送。');
       requestId = undefined;
       form.reset();
       resetLookups.forEach((reset) => reset());
-      status.textContent = `已送出，紀錄編號 ${recordId}。`;
+      const message = outcome === 'unchanged' ? '已有相同數量的預估'
+        : outcome === 'quantity_updated' ? '已修正原預估數量' : '已送出';
+      status.textContent = `${message}，紀錄編號 ${recordId}。`;
       void reloadRecords?.();
     });
   });
