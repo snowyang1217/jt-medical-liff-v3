@@ -144,7 +144,9 @@ function bindLookup(box, request, page) {
             ? [product.name, product.default_code || ''].filter(Boolean).join(' · ')
             : null
         }))
-        : result.options;
+        : page === 'transfer' && Array.isArray(result.references)
+          ? result.references.map((item) => ({ id: item?.id, label: item?.name || item?.x_name }))
+          : result.options;
       if (!Array.isArray(options) || options.some((item) => !isId(item?.id) || typeof item.label !== 'string')) {
         throw new Error('查詢結果格式不正確，請稍後再試。');
       }
