@@ -7,9 +7,17 @@ const quantityFormat = new Intl.NumberFormat('zh-TW', { maximumSignificantDigits
 const amountFormat = new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 2 });
 const isId = (value) => Number.isSafeInteger(value) && value > 0;
 const isMonth = (value) => /^\d{4}-(0[1-9]|1[0-2])$/.test(value) && !value.startsWith('0000');
-const currentMonth = () => new Intl.DateTimeFormat('sv-SE', {
-  timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit'
-}).format();
+const taipeiDateFormat = new Intl.DateTimeFormat('sv-SE', {
+  timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit'
+});
+const today = () => taipeiDateFormat.format();
+const currentMonth = () => today().slice(0, 7);
+
+function isCalendarDate(date) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date.startsWith('0000')) return false;
+  const timestamp = Date.parse(date);
+  return Number.isFinite(timestamp) && new Date(timestamp).toISOString().slice(0, 10) === date;
+}
 
 const titles = {
   forecast: '我的訂貨預估',
@@ -73,7 +81,7 @@ export function operationView(page, profile, { allowTransferWrites = false } = {
       <select name="machineId" required><option value="">請選擇目前保管的機台</option></select>
     </label>` + lookup('receiverId', '接收人')
       + input('plannedDate', '預計交接日期', 'date'),
-    performance: input('serviceDate', '跟刀日期', 'date')
+    performance: input('serviceDate', '跟刀日期', 'date', `value="${today()}"`)
       + lookup('hospitalId', '客戶／醫院') + lookup('productId', '產品')
       + input('quantity', '數量', 'number', 'min="0" step="any"')
       + input('amount', '業績金額（TWD）', 'number', 'min="0" step="0.01"')
@@ -97,13 +105,11 @@ export function operationView(page, profile, { allowTransferWrites = false } = {
 export function entryValues(page, values) {
   const note = values.note.trim();
   if (page === 'forecast' && !isMonth(values.month)) throw new Error('請選擇正確的預估月份。');
-  if (page === 'transfer') {
-    const date = values.plannedDate;
-    const timestamp = Date.parse(date);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(timestamp)
-      || new Date(timestamp).toISOString().slice(0, 10) !== date || date.startsWith('0000')) {
-      throw new Error('請選擇正確的預計交接日期。');
-    }
+  if (page === 'transfer' && !isCalendarDate(values.plannedDate)) {
+    throw new Error('請選擇正確的預計交接日期。');
+  }
+  if (page === 'performance' && !isCalendarDate(values.serviceDate)) {
+    throw new Error('請選擇正確的跟刀日期。');
   }
   const data = { note };
   for (const [name, value] of Object.entries(values)) {
@@ -115,6 +121,9 @@ export function entryValues(page, values) {
       const number = Number(value);
       if (!value || !Number.isFinite(number) || number < 0 || (name === 'quantity' && number === 0)) {
         throw new Error(name === 'quantity' ? '數量須大於零。' : '請輸入有效的業績金額。');
+      }
+      if (name === 'amount' && page === 'performance' && !/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(value)) {
+        throw new Error('請輸入最多兩位小數的新台幣金額。');
       }
       data[name] = number;
     } else if (name !== 'note') {
@@ -316,6 +325,7 @@ function bindRecords(root, request, page, refreshCustody) {
   const form = root.querySelector('[data-records]');
   if (!form) return;
   const submit = form.querySelector('button');
+  const monthInput = form.elements.namedItem('month');
   const status = root.querySelector('[data-list-status]');
   const list = root.querySelector('[data-results]');
   const next = root.querySelector('[data-next]');
@@ -330,7 +340,7 @@ function bindRecords(root, request, page, refreshCustody) {
 
   const load = async (more = false) => {
     if (loading) return;
-    const month = form.elements.namedItem('month')?.value || '';
+    const month = monthInput?.value || '';
     if (model !== 'transfer' && !isMonth(month)) {
       status.textContent = '請選擇查詢月份。';
       return;
@@ -348,6 +358,7 @@ function bindRecords(root, request, page, refreshCustody) {
     loading = true;
     submit.disabled = true;
     next.disabled = true;
+    if (page === 'report') monthInput.disabled = true;
     status.textContent = '查詢中…';
     try {
       const result = await request('LIST_OWN_RECORDS', {
@@ -357,7 +368,8 @@ function bindRecords(root, request, page, refreshCustody) {
         : page === 'transfer' ? transferRecords(result) : result;
       if (!Array.isArray(records) || records.some((row) => !validRow(page, row))
         || (nextCursor != null && (typeof nextCursor !== 'string' || !nextCursor))
-        || (page === 'report' && !Number.isFinite(totalAmount))) {
+        || (page === 'report' && !more && !Number.isFinite(totalAmount))
+        || (page === 'report' && records.some((row) => !isCalendarDate(row.date) || row.date.slice(0, 7) !== month))) {
         throw new Error('查詢結果格式不正確，請稍後再試。');
       }
       if (page === 'transfer' && typeof result.senderName === 'string' && result.senderName.trim()) {
@@ -395,12 +407,16 @@ function bindRecords(root, request, page, refreshCustody) {
       loading = false;
       submit.disabled = false;
       next.disabled = false;
+      if (page === 'report') monthInput.disabled = false;
     }
   };
 
   form.addEventListener('submit', (event) => { event.preventDefault(); void load(); });
   next.addEventListener('click', () => { void load(true); });
-  form.elements.namedItem('month')?.addEventListener('change', () => { next.hidden = true; });
+  monthInput?.addEventListener('change', () => {
+    next.hidden = true;
+    if (page === 'report') void load();
+  });
   (pending ? root : list).addEventListener('submit', async (event) => {
     const action = event.target.closest('[data-response]');
     if (!action || readOnly) return;

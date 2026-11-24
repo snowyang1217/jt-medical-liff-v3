@@ -113,3 +113,60 @@ Make 先比對 Worker 驗證的 LINE 識別碼與啟用中的員工，再以這�
 - 實作建立請求的重試去重。以員工、功能與 `requestId` 識別請求，
   相同請求回傳原紀錄 ID。Odoo 證實建立成功後才回傳正整數 `recordId`。
 - 驗收包含同一請求重送、非本人查詢、非接收人確認交接、查無資料、Odoo 失敗與庫存／標案回歸。
+
+### 跟刀業績與本人月報
+
+Odoo「跟刀業績」模型為 `x_1216`。下表是現有表單的欄位對照。
+
+| Odoo 欄位 | 來源 |
+| --- | --- |
+| `x_name` | 後端以業務名稱、產品名稱與跟刀日期組成說明 |
+| `x_studio_` | 所屬公司 Selection，使用 `x_1216` 的實際選項值 |
+| `x_studio_many2one_1` | LINE 驗證後對照的 `hr.employee` ID |
+| `x_studio_date_1` | `serviceDate`，格式 `YYYY-MM-DD` |
+| `x_studio_many2one_2` | `hospitalId`，從授權範圍內的 `res.partner` 選取 |
+| `x_studio_many2one_3` | `productId`，從授權範圍內的 `product.product` 選取 |
+| `x_studio_float_1` | `quantity`，正數 |
+| `x_studio_monetary_1` | `amount`，非負 TWD 金額，最多兩位小數 |
+| `x_studio_text_1` | `note`，最多 1,000 字 |
+
+Make 使用 `model=performance` 處理客戶／產品搜尋、寫入以及本人查詢。寫入前以同一授權範圍
+重新核對客戶及產品，並於該模型確認公司選項值、金額欄位的幣別及去重機制後再開放正式填報。
+
+本人月報的 Odoo domain 同時比對 `x_studio_`、`x_studio_many2one_1`，並使用
+`x_studio_date_1 >= 月初` 與 `x_studio_date_1 < 下月月初`。`totalAmount` 在第一頁回傳，
+應由相同條件計算整月金額，空結果回傳 `0`。明細依 `id desc` 分頁，取 51 筆並回傳最多
+50 筆，以最後一筆回傳紀錄的 `id` 作為後續游標，最後一頁回傳 `nextCursor: null`。
+明細的 `label` 使用產品名稱，`date`、`hospital`、`quantity` 和 `amount` 取自上述對照。
+正式驗收須比對同月份不同業務、跨月邊界、有多頁的整月金額及一筆資料重送。
+
+#### Make 試用路由
+
+Odoo 以 [`performance_gateway.py`](integrations/odoo/performance_gateway.py) 建立執行程式碼的
+伺服器動作，模型為 `x_1216`。以整合帳號執行，使用固定動作 ID，先測試於未啟用的
+Make 情境。Odoo 動作無須加入一般使用者的動作選單。
+
+Worker 在完成 LINE 驗證後，沿用現有動作白名單，對 `model=performance` 僅放行
+`SEARCH_REFERENCES`、`CREATE_RECORD` 和 `LIST_OWN_RECORDS`。Make 新分支置於既有 Gateway
+密鑰檢查與 LINE 員工授權之後。初次試用以 Make 明確指定的員工名單為準，查到唯一啟用中的員工才執行。
+客戶與產品搜尋都以公司及 Odoo 存取規則過濾，共用的客戶與產品也可供選擇。
+
+| JSON-2 欄位 | Make 來源 |
+| --- | --- |
+| `ids` | 單一固定的跟刀業績伺服器動作 ID |
+| `context.line_performance_operation` | 已核准的 Gateway `action` |
+| `context.line_performance_data` | 只映射此動作需要的 `data` 欄位，保留 JSON 型別 |
+| `context.line_employee_id` | Make 查到的員工 ID |
+| `context.line_company_id` | 同一筆員工在 Odoo 的公司 ID |
+| `context.line_performance_company` | 後端公司 ID 對照 `x_1216.x_studio_` 的實際 Selection 鍵 |
+| `context.line_verified_user_id` | Gateway 驗證後的 LINE 使用者 ID |
+
+HTTP 模組使用既有 Odoo 連線認證，POST `/json/2/ir.actions.server/run`。Webhook 200
+回傳 Odoo 動作的 `params` 物件。Odoo 錯誤由 Make 統一轉為失敗回應，避免回傳堆疊或憑證。
+權限拒絕由 Make 回傳 403，參數錯誤回傳 400，暫時性後端錯誤回傳 503。
+
+寫入一筆跟刀紀錄與儲存該次請求的 Odoo 外部識別碼在同一個交易內完成。重送沿用首次的
+`requestId`，識別碼依公司與員工隔離。併發的重複識別碼若使一筆寫入失敗，該交易應回滾，
+Make 保留可重試失敗回應，讓前端用同一識別碼重送以取得原紀錄 ID。若曾用不同幣別登錄，
+本人月報只加總和列出 TWD 紀錄。啟用前在 Odoo 實測幣別欄位可寫入、外部識別碼權限，
+並用兩筆同時送出的相同請求核對只新增一筆。確認 Make 與 Gateway 完成後再開啟兩個 LINE 入口。
