@@ -1,7 +1,7 @@
 import { getProfile, callApi } from './api.js?v=20261123b';
 import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261124a';
 
-import { CONFIG } from './config.js?v=20261123g';
+import { CONFIG } from './config.js?v=20261124-performance';
 import { operationView, bindOperation } from './operations.js?v=20261124-performance';
 
 const app = document.querySelector('#app');
