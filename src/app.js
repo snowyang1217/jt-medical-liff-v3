@@ -1,4 +1,4 @@
-import { getProfile, callApi } from './api.js?v=20261123b';
+import { getProfile, callApi, LineSessionError, restartLineLogin } from './api.js?v=20261124e';
 import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261124a';
 
 import { CONFIG } from './config.js?v=20261123g';
@@ -106,8 +106,30 @@ async function start() {
     if (profile) render(launchedPage());
   } catch (error) {
     app.innerHTML = '<div class="fatal"><h1>無法啟動系統</h1><p></p><button type="button">重新整理</button></div>';
-    app.querySelector('.fatal p').textContent = error.message;
-    app.querySelector('.fatal button').addEventListener('click', () => location.reload());
+    const message = app.querySelector('.fatal p');
+    const retry = app.querySelector('.fatal button');
+    const isLineSession = error instanceof LineSessionError;
+    const isExternal = isLineSession && window.liff && !window.liff.isInClient();
+    message.textContent = isLineSession && !isExternal
+      ? 'LINE 登入已失效，請從官方帳號重新開啟系統。'
+      : error.message;
+    if (isExternal) retry.textContent = '重新登入 LINE';
+    retry.addEventListener('click', () => {
+      if (!isExternal) {
+        location.reload();
+        return;
+      }
+      retry.disabled = true;
+      const url = new URL(location.pathname, location.origin);
+      const page = launchedPage();
+      if (page !== 'home') url.searchParams.set('page', page);
+      try {
+        restartLineLogin(url.href);
+      } catch {
+        message.textContent = '無法重新登入 LINE。請用無痕視窗重新開啟此網頁。';
+        retry.disabled = false;
+      }
+    });
   }
 }
 window.addEventListener('hashchange', () => {
