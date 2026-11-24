@@ -209,7 +209,9 @@ function forecastRecords(result) {
 
 function transferRecords(result) {
   if (!Array.isArray(result.transfers)) return result;
+  const respondableIds = new Set(Array.isArray(result.respondableIds) ? result.respondableIds.filter(isId) : []);
   const records = result.transfers.slice(0, 50).map((row) => ({
+    canRespond: respondableIds.has(row?.id),
     id: row?.id,
     label: row?.x_studio_many2one_1?.[1] || row?.x_name,
     date: row?.x_studio_date_3,
@@ -295,26 +297,32 @@ function bindRecords(root, request, page) {
     const action = event.target.closest('[data-response]');
     if (!action || readOnly) return;
     event.preventDefault();
-    if (action.dataset.pending || !event.submitter) return;
+    if (action.dataset.pending || loading || !event.submitter) return;
     const decision = event.submitter.value;
+    if (decision !== 'accept' && decision !== 'reject') return;
+    const recordId = Number(action.dataset.response);
+    if (!isId(recordId)) return;
     const reason = action.elements.namedItem('reason').value.trim();
     const feedback = action.querySelector('[role="status"]');
-    if (decision === 'reject' && !reason) {
-      feedback.textContent = '請填寫拒絕原因。';
+    if (decision === 'reject' && (!reason || reason.length > 1000)) {
+      feedback.textContent = '請填寫拒絕原因，最多 1,000 字。';
       return;
     }
+    if (decision === 'accept' && !window.confirm('確認接收後，機台保管人將改為你。確定接收嗎？')) return;
     action.dataset.pending = 'true';
     const buttons = [...action.querySelectorAll('button')];
     buttons.forEach((button) => { button.disabled = true; });
     feedback.textContent = '處理中…';
     try {
-      const recordId = Number(action.dataset.response);
-      const result = await request('RESPOND_TRANSFER', { data: { recordId, decision, ...(decision === 'reject' ? { reason } : {}) } });
+      const result = await request('RESPOND_TRANSFER', {
+        model: 'transfer', data: { recordId, decision, ...(decision === 'reject' ? { reason } : {}) }
+      });
       if (result.recordId !== recordId || result.status !== (decision === 'accept' ? '已確認' : '已拒絕')) {
         throw new Error('目前無法確認處理結果，請更新交接紀錄確認。');
       }
       action.closest('article').querySelector('[data-transfer-status]').textContent = `交接狀態　${result.status}`;
       action.remove();
+      void load();
     } catch (error) {
       feedback.textContent = error.message;
     } finally {

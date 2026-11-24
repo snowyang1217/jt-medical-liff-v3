@@ -47,7 +47,7 @@ LINE 驗收後，在 `CONFIG.operationPages` 加入對應頁面代碼
 | `CREATE_RECORD` | `transfer` 傳 `machineId, receiverId, plannedDate, note, requestId` | `recordId` 正整數 |
 | `CREATE_RECORD` | `performance` 傳 `serviceDate, hospitalId, productId, quantity, amount, note, requestId` | `recordId` 正整數 |
 | `LIST_OWN_RECORDS` | `forecast` 或 `performance` 傳 `month`，`transfer` 依交接人或接收人查詢。下一頁另傳 `cursor` | `records`、`nextCursor`。業績額外提供整月 `totalAmount` |
-| `RESPOND_TRANSFER` | `recordId, decision`。決定值為 `accept` 或 `reject`，拒絕時附 `reason` | `recordId`、`status`，值為「已確認」或「已拒絕」 |
+| `RESPOND_TRANSFER` | `model=transfer`，`data` 傳入 `recordId, decision`。決定值為 `accept` 或 `reject`，拒絕時附 `reason` | `recordId`、`status`，值為「已確認」或「已拒絕」 |
 
 查詢欄位限於 `forecast/productId`、`transfer/machineId`、`transfer/receiverId`、
 `performance/hospitalId` 和 `performance/productId`。查詢結果由後端按公司和權限篩選，
@@ -70,8 +70,32 @@ LINE 驗收後，在 `CONFIG.operationPages` 加入對應頁面代碼
 `x_studio_selection_2`（狀態）、`x_studio_text_1`（拒絕原因）、`x_studio_text_2`（備註）。
 前端顯示 50 筆，第 51 筆用於判斷是否顯示「載入更多」。
 
-第一階段頁面只提供查詢。正式 LINE 驗收時，用交接人、接收人與無關帳號各測一次，
+回傳 `respondableIds` 時，僅列出本頁資料中登入員工為接收人且狀態為「待確認」的 ID。
+缺少此欄位時，LINE 不顯示處理按鈕。填報權限仍由 `senderName` 控制。
+正式 LINE 驗收時，用交接人、接收人與無關帳號各測一次，
 並確認其他公司的紀錄無法讀取。查詢路由備妥後才啟用 `transfer` 頁面。
+
+### 確認接收與拒絕交接
+
+正式驗收先限 `Amy_test`（員工 #3）處理交接單 #17。Odoo 已儲存名為
+「LINE 機台交接驗收 #17」的伺服器動作，尚未接上 LINE。啟用前先確認 Amy_test
+有核對過的 LINE User ID，且與 Jacky_test 的綁定不同。Make 只可將 Worker 驗證後
+的 LINE ID 傳入動作的 `line_verified_user_id`，供 Odoo 與員工紀錄交叉比對。
+此驗收動作要求既有 Odoo 系統管理員執行權限，且只接受 Amy_test 與 #17 的組合。
+
+Make 先比對 Worker 驗證的 LINE 識別碼與啟用中的員工，再以這個員工身分查詢交接單。
+禁止採用前端申報的員工編號或公司。只對本人為接收人的交接單呼叫
+[`integrations/odoo/transfer_decision.py`](integrations/odoo/transfer_decision.py) 的 Odoo 伺服器動作。
+
+建立 Odoo Studio 的程式碼動作，模型綁定 `x_1213`，並限制整合帳號的執行權限。
+伺服器動作的 `active_model` 固定為 `x_1213`，`active_id` 與 `active_ids` 以已核對的
+單一交接單帶入。從 Make 的員工查詢帶入 `line_employee_id`、`line_company_id`、
+`line_transfer_company`（交接模型的公司選項值），再傳 `line_transfer_decision` 與
+`line_transfer_reason`。LINE 客戶端僅可傳交接單編號、決定和拒絕原因。
+
+確認時在同一次 Odoo 交易換保管人並完成交接單。拒絕時僅更新交接單。Make 在動作
+成功後，再讀取正式紀錄並回傳 `recordId` 與 `status`。第一輪驗收應涵蓋本人接收、
+拒絕、他人操作、舊保管人已更新、相同決定重送與兩人同時操作。
 
 ### 後端資料對照與驗收
 
