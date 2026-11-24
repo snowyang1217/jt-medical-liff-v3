@@ -2,6 +2,14 @@ import { CONFIG } from './config.js?v=20261123b';
 
 const wait = (ms = 280) => new Promise((resolve) => setTimeout(resolve, ms));
 
+export class LineSessionError extends Error {}
+
+export function restartLineLogin(redirectUri) {
+  const liff = window.liff;
+  liff.logout();
+  liff.login({ redirectUri });
+}
+
 export async function callApi(action, payload = {}) {
   if (CONFIG.demoMode) {
     await wait();
@@ -17,7 +25,7 @@ export async function callApi(action, payload = {}) {
   });
 
   if (response.status === 401) {
-    throw new Error('LINE 登入已失效，請從官方帳號重新開啟系統。');
+    throw new LineSessionError('LINE 登入已失效，請重新登入。');
   }
   if (action === 'SEARCH_INVENTORY' && response.status === 403) {
     throw new Error('這個 LINE 帳號尚未取得庫存查詢權限。');
@@ -46,7 +54,7 @@ export async function getProfile() {
   }
   const lineProfile = await window.liff.getProfile();
   const idToken = window.liff.getIDToken();
-  if (!idToken) throw new Error('無法取得 LINE 身分驗證，請重新開啟系統。');
+  if (!idToken) throw new LineSessionError('無法取得 LINE 身分驗證，請重新登入。');
 
   const result = await callApi('GET_PROFILE', { auth: { idToken, lineUserId: lineProfile.userId } });
   if (typeof result.profile?.name !== 'string') {
