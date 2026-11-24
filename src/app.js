@@ -48,7 +48,16 @@ async function sendFunctionName(label, page) {
       return;
     }
 
-    await liff.sendMessages([{ type: 'text', text: label }]);
+    const notice = showChatNotice(page, '正在傳送功能名稱到 LINE 對話…');
+    const timeout = window.setTimeout(() => {
+      if (notice) notice.textContent = 'LINE 尚未回覆傳送結果。功能已開啟，請回原對話確認。';
+    }, 8000);
+    try {
+      await liff.sendMessages([{ type: 'text', text: label }]);
+      if (notice) notice.textContent = 'LINE 已回覆傳送成功，請回原對話查看功能名稱。';
+    } finally {
+      window.clearTimeout(timeout);
+    }
   } catch {
     let permission;
     try {
@@ -70,11 +79,16 @@ function showChatNotice(page, message) {
   if (currentPage !== page) return;
   const content = app.querySelector('.page');
   if (!content) return;
-  const notice = document.createElement('p');
-  notice.className = 'notice';
-  notice.setAttribute('role', 'status');
+  let notice = content.querySelector('[data-chat-notice]');
+  if (!notice) {
+    notice = document.createElement('p');
+    notice.className = 'notice';
+    notice.setAttribute('role', 'status');
+    notice.setAttribute('data-chat-notice', '');
+    content.prepend(notice);
+  }
   notice.textContent = message;
-  content.prepend(notice);
+  return notice;
 }
 
 function bindEvents() {
