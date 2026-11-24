@@ -1,7 +1,7 @@
 import { getProfile, callApi } from './api.js?v=20261123b';
 import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261124-menu-chat';
 
-import { CONFIG } from './config.js?v=20261124-performance';
+import { CONFIG } from './config.js?v=20261125-ai-assistant';
 import { operationView, bindOperation } from './operations.js?v=20261124-transfer-receive';
 
 const app = document.querySelector('#app');
@@ -54,7 +54,7 @@ async function sendFunctionName(label, page) {
     }, 8000);
     try {
       await liff.sendMessages([{ type: 'text', text: label }]);
-      if (notice) notice.textContent = 'LINE 已回覆傳送成功，請回原對話查看功能名稱。';
+      notice?.remove();
     } finally {
       window.clearTimeout(timeout);
     }
