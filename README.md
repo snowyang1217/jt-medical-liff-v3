@@ -113,3 +113,29 @@ Make 先比對 Worker 驗證的 LINE 識別碼與啟用中的員工，再以這�
 - 實作建立請求的重試去重。以員工、功能與 `requestId` 識別請求，
   相同請求回傳原紀錄 ID。Odoo 證實建立成功後才回傳正整數 `recordId`。
 - 驗收包含同一請求重送、非本人查詢、非接收人確認交接、查無資料、Odoo 失敗與庫存／標案回歸。
+
+### 跟刀業績與本人月報
+
+Odoo「跟刀業績」模型為 `x_1216`。下表是現有表單的欄位對照。
+
+| Odoo 欄位 | 來源 |
+| --- | --- |
+| `x_name` | 後端以業務名稱、產品名稱與跟刀日期組成說明 |
+| `x_studio_` | 所屬公司 Selection，使用 `x_1216` 的實際選項值 |
+| `x_studio_many2one_1` | LINE 驗證後對照的 `hr.employee` ID |
+| `x_studio_date_1` | `serviceDate`，格式 `YYYY-MM-DD` |
+| `x_studio_many2one_2` | `hospitalId`，從授權範圍內的 `res.partner` 選取 |
+| `x_studio_many2one_3` | `productId`，從授權範圍內的 `product.product` 選取 |
+| `x_studio_float_1` | `quantity`，正數 |
+| `x_studio_monetary_1` | `amount`，非負 TWD 金額，最多兩位小數 |
+| `x_studio_text_1` | `note`，最多 1,000 字 |
+
+Make 使用 `model=performance` 處理客戶／產品搜尋、寫入以及本人查詢。寫入前以同一授權範圍
+重新核對客戶及產品，並於該模型確認公司選項值、金額欄位的幣別及去重機制後再開放正式填報。
+
+本人月報的 Odoo domain 同時比對 `x_studio_`、`x_studio_many2one_1`，並使用
+`x_studio_date_1 >= 月初` 與 `x_studio_date_1 < 下月月初`。`totalAmount` 在第一頁回傳，
+應由相同條件計算整月金額，空結果回傳 `0`。明細依 `id desc` 分頁，取 51 筆並回傳最多
+50 筆，以最後一筆回傳紀錄的 `id` 作為後續游標，最後一頁回傳 `nextCursor: null`。
+明細的 `label` 使用產品名稱，`date`、`hospital`、`quantity` 和 `amount` 取自上述對照。
+正式驗收須比對同月份不同業務、跨月邊界、有多頁的整月金額及一筆資料重送。
