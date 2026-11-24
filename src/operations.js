@@ -46,12 +46,24 @@ function recordsView(page) {
   </section>`;
 }
 
+function custodyView() {
+  return `<section aria-labelledby="custody-heading" data-custody>
+    <h2 id="custody-heading">我目前保管的機台</h2>
+    <button class="secondary" type="button" data-custody-refresh>更新保管機台</button>
+    <p class="empty" role="status"></p>
+    <div class="list" data-custody-results></div>
+    <button class="secondary" type="button" data-custody-next hidden>載入更多保管機台</button>
+  </section>`;
+}
+
 export function operationView(page, profile, { allowTransferWrites = false } = {}) {
   const readOnly = page === 'transfer' && !allowTransferWrites;
   const fields = {
     forecast: input('month', '預估月份', 'month', `value="${currentMonth()}"`)
       + lookup('productId', '產品') + input('quantity', '預估數量', 'number', 'min="0" step="any"'),
-    transfer: lookup('machineId', '交接機台') + lookup('receiverId', '接收人')
+    transfer: `<label class="field"><span>交接機台<b>＊</b></span>
+      <select name="machineId" required><option value="">請選擇目前保管的機台</option></select>
+    </label>` + lookup('receiverId', '接收人')
       + input('plannedDate', '預計交接日期', 'date'),
     performance: input('serviceDate', '跟刀日期', 'date')
       + lookup('hospitalId', '客戶／醫院') + lookup('productId', '產品')
@@ -60,6 +72,7 @@ export function operationView(page, profile, { allowTransferWrites = false } = {
   };
   return `<section data-operation="${page}"${readOnly ? ' data-read-only' : ''}>
     <div class="page-head"><button class="back" data-page="home" aria-label="回首頁">‹</button><div><h1>${titles[page]}</h1></div></div>
+    ${page === 'transfer' ? custodyView() + recordsView(page) : ''}
     ${page === 'report' || readOnly ? '' : `<form data-entry${page === 'transfer' ? ' hidden' : ''}>
       ${page === 'transfer' ? '<h2>新增交接申請</h2>' : ''}
       <p>${page === 'transfer' ? '交接人　<span data-transfer-sender></span>' : `填報人　${escapeHtml(profile.name)}`}</p>
@@ -68,7 +81,7 @@ export function operationView(page, profile, { allowTransferWrites = false } = {
       <button class="primary" type="submit">${page === 'transfer' ? '送出交接申請' : '確認送出'}</button>
       <p class="empty" role="status"></p>
     </form>`}
-    ${recordsView(page)}
+    ${page === 'transfer' ? '' : recordsView(page)}
   </section>`;
 }
 
@@ -118,6 +131,68 @@ async function withStatus(button, status, message, run) {
   } finally {
     button.disabled = false;
   }
+}
+
+function bindCustody(root, request) {
+  const section = root.querySelector('[data-custody]');
+  const list = section.querySelector('[data-custody-results]');
+  const status = section.querySelector('[role="status"]');
+  const refresh = section.querySelector('[data-custody-refresh]');
+  const next = section.querySelector('[data-custody-next]');
+  const select = root.querySelector('select[name="machineId"]');
+  const ownedIds = new Set();
+  let cursor = null;
+  let requestVersion = 0;
+
+  const load = async (more = false) => {
+    if (more && (next.disabled || !cursor)) return;
+    const version = ++requestVersion;
+    const previousSelection = select?.value;
+    const after = more ? cursor : 0;
+    if (!more) {
+      list.replaceChildren();
+      ownedIds.clear();
+      if (select) select.length = 1;
+      next.hidden = true;
+      cursor = null;
+    }
+    refresh.disabled = next.disabled = true;
+    status.textContent = '查詢中…';
+    try {
+      const result = await request('SEARCH_REFERENCES', {
+        model: 'transfer', data: { field: 'machineId', keyword: '', ...(more ? { cursor: after } : {}) }
+      });
+      if (version !== requestVersion) return;
+      const rows = Array.isArray(result.references)
+        ? result.references.map((row) => ({ id: row?.id, label: row?.x_name || row?.name }))
+        : result.options;
+      if (!Array.isArray(rows) || rows.length > 51 || rows.some((row, index) =>
+        !isId(row?.id) || row.id <= (index ? rows[index - 1].id : after)
+        || typeof row.label !== 'string' || !row.label.trim())) {
+        throw new Error('保管機台資料格式不正確，請稍後再試。');
+      }
+      const machines = rows.slice(0, 50);
+      for (const { id, label } of machines) {
+        ownedIds.add(id);
+        select?.add(new Option(label, id));
+      }
+      if (select && ownedIds.has(Number(previousSelection))) select.value = previousSelection;
+      list.insertAdjacentHTML('beforeend', machines.map(({ label }) =>
+        `<article class="record-card"><strong>${escapeHtml(label)}</strong></article>`).join(''));
+      cursor = rows.length > 50 ? machines.at(-1).id : null;
+      next.hidden = cursor === null;
+      status.textContent = ownedIds.size ? '' : '你目前沒有保管機台。';
+    } catch (error) {
+      if (version === requestVersion) status.textContent = error.message;
+    } finally {
+      if (version === requestVersion) refresh.disabled = next.disabled = false;
+    }
+  };
+
+  refresh.addEventListener('click', () => void load());
+  next.addEventListener('click', () => void load(true));
+  void load();
+  return { refresh: load, owns: (id) => ownedIds.has(id) };
 }
 
 function bindLookup(box, request, page) {
@@ -225,7 +300,7 @@ function transferRecords(result) {
   return { records, nextCursor: result.transfers.length > 50 ? String(records[49].id) : null };
 }
 
-function bindRecords(root, request, page) {
+function bindRecords(root, request, page, refreshCustody) {
   const readOnly = root.hasAttribute('data-read-only');
   const form = root.querySelector('[data-records]');
   if (!form) return;
@@ -323,6 +398,7 @@ function bindRecords(root, request, page) {
       action.closest('article').querySelector('[data-transfer-status]').textContent = `交接狀態　${result.status}`;
       action.remove();
       void load();
+      if (decision === 'accept') void refreshCustody?.();
     } catch (error) {
       feedback.textContent = error.message;
     } finally {
@@ -367,7 +443,8 @@ export function bindOperation(root, profile, api = callApi) {
   const page = root.dataset.operation;
   const auth = { idToken: profile.idToken, lineUserId: profile.lineUserId };
   const request = (action, payload) => api(action, { auth, ...payload });
-  const reloadRecords = bindRecords(root, request, page);
+  const custody = page === 'transfer' ? bindCustody(root, request) : null;
+  const reloadRecords = bindRecords(root, request, page, custody?.refresh);
   const form = root.querySelector('[data-entry]');
   if (!form) return;
   const resetLookups = [...form.querySelectorAll('[data-lookup]')].map((box) => bindLookup(box, request, page));
@@ -378,6 +455,7 @@ export function bindOperation(root, profile, api = callApi) {
     event.preventDefault();
     void withStatus(button, status, '送出中…', async () => {
       const values = entryValues(page, Object.fromEntries(new FormData(form)));
+      if (custody && !custody.owns(values.machineId)) throw new Error('請選擇你目前保管的機台。');
       requestId = createRequestId(requestId, values);
       const send = (data) => request('CREATE_RECORD', { model: page, data: { ...data, requestId: requestId.id } });
       const result = page === 'forecast' ? await submitForecast(send, values) : await send(values);
