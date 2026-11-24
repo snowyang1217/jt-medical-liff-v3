@@ -18,3 +18,8 @@
 [data-operation] [data-next] { margin-top: 12px; }
 [data-operation] [data-results] { margin-top: 12px; }
 [data-operation] [data-response] { margin-top: 12px; }
+
+.pending-transfer-link:not([hidden]){display:block;color:var(--navy);font-weight:800;margin:0 0 16px}
+.pending-transfers{margin:18px 0;padding:14px;border:1px solid #e6c484;border-radius:14px;background:#fff7e7}
+.pending-transfers h2{margin:0 0 8px;color:var(--navy)}
+.pending-transfers [role=status]:empty{display:none}
