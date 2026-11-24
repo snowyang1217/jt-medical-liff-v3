@@ -56,7 +56,7 @@ function recordsView(page) {
 
 function pendingTransfersView() {
   return `<section class="pending-transfers" aria-labelledby="pending-transfer-heading" data-pending-transfers>
-    <h2 id="pending-transfer-heading">待我接收</h2>
+    <h2 id="pending-transfer-heading" tabindex="-1">待接收交接</h2>
     <p role="status" data-pending-status></p>
     <div class="list" data-pending-results></div>
   </section>`;
@@ -306,7 +306,8 @@ function transferRecords(result) {
   const records = result.transfers.slice(0, 50).map((row) => ({
     awaitingMe: isId(result.employeeId) && row?.x_studio_many2one_3?.[0] === result.employeeId
       && row.x_studio_selection_2 === '待確認',
-    canRespond: respondableIds.has(row?.id),
+    canRespond: isId(result.employeeId) && row?.x_studio_many2one_3?.[0] === result.employeeId
+      && respondableIds.has(row?.id),
     id: row?.id,
     label: row?.x_studio_many2one_1?.[1] || row?.x_name,
     date: row?.x_studio_date_3,
@@ -332,6 +333,12 @@ function bindRecords(root, request, page, refreshCustody) {
   const pending = root.querySelector('[data-pending-results]');
   const pendingStatus = root.querySelector('[data-pending-status]');
   const pendingLink = root.querySelector('[data-pending-link]');
+  pendingLink?.addEventListener('click', (event) => {
+    event.preventDefault();
+    const heading = root.querySelector('#pending-transfer-heading');
+    heading.focus({ preventScroll: true });
+    heading.scrollIntoView({ block: 'start' });
+  });
   let pendingCount = 0;
   let cursor = null;
   let loadedMonth = '';
@@ -392,7 +399,7 @@ function bindRecords(root, request, page, refreshCustody) {
           recordCard(page, row, readOnly)).join(''));
         pendingCount += incoming.length;
         pendingLink.hidden = pendingCount === 0;
-        pendingLink.textContent = pendingCount ? `${pendingCount} 筆交接待你接收` : '';
+        pendingLink.textContent = pendingCount ? `${pendingCount} 筆交接待接收` : '';
         pendingStatus.textContent = !isId(result.employeeId) ? '目前無法辨識待接收交接，請查看下方紀錄。'
           : pendingCount ? (cursor ? '下方可載入較早的紀錄。' : '')
           : cursor ? '目前載入的紀錄沒有待接收交接。' : '目前沒有待接收的交接。';
