@@ -1,5 +1,5 @@
 import { getProfile, callApi } from './api.js?v=20261123b';
-import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261124a';
+import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261124-menu-chat';
 
 import { CONFIG } from './config.js?v=20261124-performance';
 import { operationView, bindOperation } from './operations.js?v=20261124-transfer-receive';
@@ -40,8 +40,39 @@ function render(page = currentPage) {
 
 function navigate(page) { window.location.hash = page === 'home' ? '' : `#${page}`; render(page); window.scrollTo({ top: 0, behavior: 'smooth' }); }
 
+async function sendFunctionName(label, page) {
+  const liff = window.liff;
+  if (!label || !liff?.isInClient() || liff.getContext()?.type !== 'utou') return;
+
+  try {
+    const scopes = await liff.permission.getGrantedAll();
+    if (!scopes.includes('chat_message.write')) {
+      showChatNotice(page, '尚未授權 LINE 傳送訊息，功能已開啟。');
+      return;
+    }
+    await liff.sendMessages([{ type: 'text', text: label }]);
+  } catch {
+    showChatNotice(page, '功能已開啟，這次未能在 LINE 對話顯示功能名稱。');
+  }
+}
+
+function showChatNotice(page, message) {
+  if (currentPage !== page) return;
+  const content = app.querySelector('.page');
+  if (!content) return;
+  const notice = document.createElement('p');
+  notice.className = 'notice';
+  notice.setAttribute('role', 'status');
+  notice.textContent = message;
+  content.prepend(notice);
+}
+
 function bindEvents() {
-  app.querySelectorAll('[data-page]').forEach((button) => button.addEventListener('click', () => navigate(button.dataset.page)));
+  app.querySelectorAll('[data-page]').forEach((button) => button.addEventListener('click', () => {
+    const { page, chatLabel } = button.dataset;
+    navigate(page);
+    if (chatLabel) void sendFunctionName(chatLabel, page);
+  }));
   app.querySelector('#inventorySearch')?.addEventListener('submit', (event) => searchRecords(event, {
     prefix: 'inventory',
     action: 'SEARCH_INVENTORY',
