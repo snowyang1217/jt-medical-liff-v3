@@ -42,17 +42,27 @@ function navigate(page) { window.location.hash = page === 'home' ? '' : `#${page
 
 async function sendFunctionName(label, page) {
   const liff = window.liff;
-  if (!label || !liff?.isInClient() || liff.getContext()?.type !== 'utou') return;
-
   try {
-    const scopes = await liff.permission.getGrantedAll();
-    if (!scopes.includes('chat_message.write')) {
-      showChatNotice(page, '尚未授權 LINE 傳送訊息，功能已開啟。');
+    if (!liff?.isInClient() || liff.getContext()?.type !== 'utou') {
+      showChatNotice(page, '若要在對話留下功能名稱，請在手機 LINE 的一對一對話裡點開 LIFF 連結。');
       return;
     }
+
     await liff.sendMessages([{ type: 'text', text: label }]);
   } catch {
-    showChatNotice(page, '功能已開啟，這次未能在 LINE 對話顯示功能名稱。');
+    let permission;
+    try {
+      permission = (await liff?.permission?.query('chat_message.write'))?.state;
+    } catch {
+      // The send can fail before the current session's permission is readable.
+    }
+    if (permission === 'prompt') {
+      showChatNotice(page, '這個 LINE 帳號尚未同意傳送訊息。請從聊天訊息重開 LIFF，並在授權畫面選擇允許。');
+    } else if (permission === 'unavailable') {
+      showChatNotice(page, '這次開啟的 LIFF 尚未取得聊天傳送權限。請關閉頁面後，從原對話重開。');
+    } else {
+      showChatNotice(page, '功能已開啟，但 LINE 未能送出功能名稱。請從原對話中的 LIFF 連結重開。');
+    }
   }
 }
 
