@@ -28,7 +28,7 @@ export function homeView(profile, availablePages) {
   return html`
     <div class="greeting"><p>您好，${escapeHtml(profile.name)}</p><h1>今天要處理什麼？</h1><small>${escapeHtml(profile.role)} · ${escapeHtml(profile.company)}</small></div>
     <section class="module-grid">${modules.map(([id,title,desc,icon]) => availablePages.has(id)
-      ? html`<button class="module-card" data-page="${id}"><i>${icon}</i><strong>${title}</strong><small>${desc}</small><span>→</span></button>`
+      ? html`<button class="module-card" data-page="${id}" data-chat-label="${escapeHtml(title)}"><i>${icon}</i><strong>${title}</strong><small>${desc}</small><span>→</span></button>`
       : html`<button class="module-card" disabled><i>${icon}</i><strong>${title}</strong><small>功能尚未開放</small></button>`).join('')}</section>
 `;
 }
