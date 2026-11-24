@@ -46,6 +46,14 @@ function recordsView(page) {
   </section>`;
 }
 
+function pendingTransfersView() {
+  return `<section class="pending-transfers" aria-labelledby="pending-transfer-heading" data-pending-transfers>
+    <h2 id="pending-transfer-heading">待我接收</h2>
+    <p role="status" data-pending-status></p>
+    <div class="list" data-pending-results></div>
+  </section>`;
+}
+
 function custodyView() {
   return `<section aria-labelledby="custody-heading" data-custody>
     <h2 id="custody-heading">我目前保管的機台</h2>
@@ -72,7 +80,8 @@ export function operationView(page, profile, { allowTransferWrites = false } = {
   };
   return `<section data-operation="${page}"${readOnly ? ' data-read-only' : ''}>
     <div class="page-head"><button class="back" data-page="home" aria-label="回首頁">‹</button><div><h1>${titles[page]}</h1></div></div>
-    ${page === 'transfer' ? custodyView() + recordsView(page) : ''}
+    ${page === 'transfer' ? '<a class="notice pending-transfer-link" href="#pending-transfer-heading" data-pending-link hidden></a>'
+      + custodyView() + pendingTransfersView() + recordsView(page) : ''}
     ${page === 'report' || readOnly ? '' : `<form data-entry${page === 'transfer' ? ' hidden' : ''}>
       ${page === 'transfer' ? '<h2>新增交接申請</h2>' : ''}
       <p>${page === 'transfer' ? '交接人　<span data-transfer-sender></span>' : `填報人　${escapeHtml(profile.name)}`}</p>
@@ -260,7 +269,7 @@ function recordCard(page, row, readOnly) {
       <button type="submit" class="secondary" name="decision" value="accept">確認接收</button>
       <button type="submit" class="secondary" name="decision" value="reject">拒絕交接</button>
       <p class="empty" role="status"></p>
-    </form>` : ''}</div></article>`;
+    </form>` : row.awaitingMe ? '<p>待接收 · 這筆尚未開放在 LINE 確認</p>' : ''}</div></article>`;
 }
 
 function validRow(page, row) {
@@ -286,6 +295,8 @@ function transferRecords(result) {
   if (!Array.isArray(result.transfers)) return result;
   const respondableIds = new Set(Array.isArray(result.respondableIds) ? result.respondableIds.filter(isId) : []);
   const records = result.transfers.slice(0, 50).map((row) => ({
+    awaitingMe: isId(result.employeeId) && row?.x_studio_many2one_3?.[0] === result.employeeId
+      && row.x_studio_selection_2 === '待確認',
     canRespond: respondableIds.has(row?.id),
     id: row?.id,
     label: row?.x_studio_many2one_1?.[1] || row?.x_name,
@@ -308,6 +319,10 @@ function bindRecords(root, request, page, refreshCustody) {
   const status = root.querySelector('[data-list-status]');
   const list = root.querySelector('[data-results]');
   const next = root.querySelector('[data-next]');
+  const pending = root.querySelector('[data-pending-results]');
+  const pendingStatus = root.querySelector('[data-pending-status]');
+  const pendingLink = root.querySelector('[data-pending-link]');
+  let pendingCount = 0;
   let cursor = null;
   let loadedMonth = '';
   let loading = false;
@@ -323,6 +338,10 @@ function bindRecords(root, request, page, refreshCustody) {
     if (more && (!cursor || month !== loadedMonth)) return;
     if (!more) {
       list.replaceChildren();
+      pending?.replaceChildren();
+      pendingCount = 0;
+      if (pendingLink) pendingLink.hidden = true;
+      if (pendingStatus) pendingStatus.textContent = '查詢中…';
       cursor = null;
       next.hidden = true;
     }
@@ -354,10 +373,24 @@ function bindRecords(root, request, page, refreshCustody) {
       const summary = page === 'report' && !more
         ? `<p class="notice">${escapeHtml(month)} 跟刀業績合計　<strong>${amountFormat.format(totalAmount)}</strong></p>`
         : '';
-      list.insertAdjacentHTML('beforeend', summary + records.map((row) => recordCard(page, row, readOnly)).join(''));
-      status.textContent = !more && !records.length ? '查無紀錄。' : '';
+      const incoming = pending ? records.filter((row) => row.awaitingMe === true) : [];
+      const history = pending ? records.filter((row) => row.awaitingMe !== true) : records;
+      if (pending) {
+        pending.insertAdjacentHTML('beforeend', incoming.map((row) =>
+          recordCard(page, row, readOnly)).join(''));
+        pendingCount += incoming.length;
+        pendingLink.hidden = pendingCount === 0;
+        pendingLink.textContent = pendingCount ? `${pendingCount} 筆交接待你接收` : '';
+        pendingStatus.textContent = !isId(result.employeeId) ? '目前無法辨識待接收交接，請查看下方紀錄。'
+          : pendingCount ? (cursor ? '下方可載入較早的紀錄。' : '')
+          : cursor ? '目前載入的紀錄沒有待接收交接。' : '目前沒有待接收的交接。';
+      }
+      list.insertAdjacentHTML('beforeend', summary + history.map((row) => recordCard(page, row, readOnly)).join(''));
+      status.textContent = !more && !history.length
+        ? (page === 'transfer' ? '目前沒有其他交接紀錄。' : '查無紀錄。') : '';
     } catch (error) {
       status.textContent = error.message;
+      if (pendingStatus && !more) pendingStatus.textContent = '目前無法載入待接收交接。';
     } finally {
       loading = false;
       submit.disabled = false;
@@ -368,7 +401,7 @@ function bindRecords(root, request, page, refreshCustody) {
   form.addEventListener('submit', (event) => { event.preventDefault(); void load(); });
   next.addEventListener('click', () => { void load(true); });
   form.elements.namedItem('month')?.addEventListener('change', () => { next.hidden = true; });
-  list.addEventListener('submit', async (event) => {
+  (pending ? root : list).addEventListener('submit', async (event) => {
     const action = event.target.closest('[data-response]');
     if (!action || readOnly) return;
     event.preventDefault();
