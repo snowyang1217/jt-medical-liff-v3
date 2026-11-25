@@ -23,3 +23,94 @@
 .pending-transfers{margin:18px 0;padding:14px;border:1px solid #e6c484;border-radius:14px;background:#fff7e7}
 .pending-transfers h2{margin:0 0 8px;color:var(--navy)}
 .pending-transfers [role=status]:empty{display:none}
+
+.report-total,
+.report-chart {
+  margin-block: 0 16px;
+  border: 1px solid #dce6ee;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.report-total {
+  background: #eaf3f9;
+  color: #163859;
+}
+
+.report-total p,
+.report-chart h3 {
+  margin: 0 0 8px;
+}
+
+.report-total strong {
+  font-size: clamp(1.5rem, 6vw, 2.2rem);
+  overflow-wrap: anywhere;
+}
+
+.report-chart {
+  background: #fff;
+}
+
+.report-chart ul {
+  display: grid;
+  gap: 14px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-bar-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  margin-bottom: 5px;
+  overflow-wrap: anywhere;
+}
+
+.report-bar-label small {
+  color: #495967;
+  white-space: nowrap;
+}
+
+.report-rank,
+.report-bar-label strong {
+  color: #163859;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-bar-track {
+  position: relative;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: #eaf0f5;
+}
+
+.report-bar-track span {
+  position: absolute;
+  block-size: 100%;
+  border-radius: inherit;
+  background: #246694;
+}
+
+.report-total .report-updated {
+  margin-block: 8px 12px;
+  font-size: .875rem;
+}
+
+[data-report-images]:not(:empty) {
+  margin-top: 12px;
+  font-size: .875rem;
+}
+
+[data-report-images] details {
+  margin-top: 8px;
+}
+
+[data-report-images] img {
+  display: block;
+  max-width: 100%;
+  margin: 8px 0;
+}
