@@ -2,7 +2,7 @@ import { getProfile, callApi } from './api.js?v=20261125-owner-pilot';
 import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261125-team-monthly';
 
 import { CONFIG } from './config.js?v=20261125-ai-assistant';
-import { operationView, bindOperation } from './operations.js?v=20261126-report-save';
+import { operationView, bindOperation } from './operations.js?v=20261126-performance-fields';
 
 const app = document.querySelector('#app');
 let profile = null;

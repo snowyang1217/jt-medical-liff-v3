@@ -50,14 +50,20 @@ products = env["product.product"].with_context(allowed_company_ids=[company_id])
 own_records = [("x_studio_", "=", company_key), ("x_studio_many2one_1", "=", employee_id)]
 
 if operation in ("CREATE_RECORD", "LIST_OWN_RECORDS"):
-    currency_field = performance.fields_get(
-        ["x_studio_monetary_1"], ["currency_field"]
-    )["x_studio_monetary_1"].get("currency_field")
-    if not currency_field:
+    price_fields = performance.fields_get(
+        ["x_studio_monetary_1", "x_studio_twd"], ["currency_field"]
+    )
+    currency_field = price_fields["x_studio_monetary_1"].get("currency_field")
+    unit_currency_field = price_fields["x_studio_twd"].get("currency_field")
+    if not currency_field or not unit_currency_field:
         raise UserError("尚未確認跟刀金額的幣別欄位。")
     currency = env["res.currency"].search([("name", "=", "TWD")], limit=1)
     if not currency:
         raise UserError("尚未啟用新台幣。")
+
+    department_options = dict(performance.with_context(lang="zh_TW").fields_get(
+        ["x_studio_selection_1"], ["selection"]
+    )["x_studio_selection_1"]["selection"])
 
 if operation == "SEARCH_REFERENCES":
     field = payload.get("field")
@@ -107,6 +113,9 @@ elif operation == "LIST_OWN_RECORDS":
             "date": row.x_studio_date_1.isoformat(),
             "hospital": row.x_studio_many2one_2.display_name or "",
             "quantity": row.x_studio_float_1,
+            "department": department_options.get(row.x_studio_selection_1, ""),
+            "doctor": row.x_studio_char_1 or "",
+            "unitPrice": row.x_studio_twd if row.x_studio_twd and row[unit_currency_field] == currency else None,
             "amount": row.x_studio_monetary_1,
         } for row in rows],
         "nextCursor": str(rows[-1].id) if len(page) > 50 else None,
@@ -121,6 +130,9 @@ else:
     product_id = payload.get("productId")
     quantity = payload.get("quantity")
     amount = payload.get("amount")
+    unit_price = payload.get("unitPrice")
+    department = payload.get("department", "")
+    doctor = payload.get("doctor", "")
     note = payload.get("note", "")
     request_id = payload.get("requestId")
     if not service_date or not valid_id(hospital_id) or not valid_id(product_id):
@@ -129,6 +141,17 @@ else:
         raise UserError("數量須大於零。")
     if not is_number(amount) or not 0 <= amount < float("inf") or amount != round(amount, 2):
         raise UserError("請輸入最多兩位小數的新台幣金額。")
+    if unit_price is not None and (
+        not is_number(unit_price) or not 0 <= unit_price < float("inf") or unit_price != round(unit_price, 2)
+    ):
+        raise UserError("請輸入最多兩位小數的新台幣單價。")
+    if not isinstance(department, str):
+        raise UserError("請選擇有效的科別。")
+    department_keys = [key for key, label in department_options.items() if label == department]
+    if department and len(department_keys) != 1:
+        raise UserError("請選擇有效的科別。")
+    if not isinstance(doctor, str) or len(doctor.strip()) > 100:
+        raise UserError("醫師姓名最多 100 字。")
     if not isinstance(note, str) or len(note) > 1000:
         raise UserError("備註最多 1,000 字。")
     if not isinstance(request_id, str) or len(request_id) != 36 or [len(part) for part in request_id.split("-")] != [8, 4, 4, 4, 12]:
@@ -154,7 +177,7 @@ else:
         if not hospital or not product:
             raise UserError("客戶或產品已不在可用範圍，請重新搜尋。")
 
-        row = performance.create({
+        values = {
             "x_name": "%s｜%s｜%s" % (employee.name, product.display_name, service_date.isoformat()),
             "x_studio_": company_key,
             "x_studio_many2one_1": employee_id,
@@ -165,7 +188,15 @@ else:
             "x_studio_monetary_1": amount,
             "x_studio_text_1": note.strip(),
             currency_field: currency.id,
-        })
+        }
+        if department:
+            values["x_studio_selection_1"] = department_keys[0]
+        if doctor.strip():
+            values["x_studio_char_1"] = doctor.strip()
+        if unit_price is not None:
+            values["x_studio_twd"] = unit_price
+            values[unit_currency_field] = currency.id
+        row = performance.create(values)
         marker["res_id"] = row.id
         marker["noupdate"] = True
         identifiers.create(marker)
