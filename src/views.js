@@ -22,7 +22,7 @@ export function homeView(profile, availablePages) {
     ['forecast','我的訂貨預估','填寫預估月份、產品與數量','▱'],
     ['tender','標案查詢','搜尋標案名稱或編號','◫'],
     ['transfer','機台交接','填寫交接申請與查看紀錄','⇄'],
-    ['report','我的業績','查詢本月業績與紀錄','▤'],
+    ['report','業績統計','查看每月跟刀業績','▤'],
     ['performance','跟刀業績輸入','登錄產品、數量與業績','◈']
   ];
   return html`

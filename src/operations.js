@@ -22,7 +22,7 @@ function isCalendarDate(date) {
 const titles = {
   forecast: '我的訂貨預估',
   transfer: '機台交接',
-  report: '我的業績',
+  report: '業績統計',
   performance: '跟刀業績輸入'
 };
 
@@ -44,11 +44,12 @@ function input(name, label, type, properties = '') {
 
 function recordsView(page) {
   if (page === 'performance') return '';
-  const title = page === 'transfer' ? '我的交接紀錄' : page === 'forecast' ? '我的預估紀錄' : '跟刀業績紀錄';
+  const title = page === 'transfer' ? '我的交接紀錄' : page === 'forecast' ? '我的預估紀錄' : '跟刀業績月報';
   const monthField = page === 'transfer' ? '' : input('month', '查詢月份', 'month', `value="${currentMonth()}"`);
   return `<section aria-label="${title}"><h2>${title}</h2>
     <form data-records>${monthField}<button class="primary" type="submit">${page === 'transfer' ? '更新交接紀錄' : '查詢'}</button></form>
     <p class="empty" data-list-status role="status"></p>
+    ${page === 'report' ? '<div data-report-summary></div>' : ''}
     <div class="list" data-results></div>
     <button class="secondary" type="button" data-next hidden>載入更多</button>
   </section>`;
@@ -321,6 +322,61 @@ function transferRecords(result) {
   return { records, nextCursor: result.transfers.length > 50 ? String(records[49].id) : null };
 }
 
+function validChartRows(rows) {
+  return Array.isArray(rows) && rows.every((row) =>
+    typeof row?.name === 'string' && row.name.trim() && Number.isFinite(row.amount));
+}
+
+function reportChart(title, rows, ranked = false) {
+  if (!rows.length) return `<section class="report-chart"><h3>${title}</h3><p>目前沒有可顯示的人員。</p></section>`;
+  const ordered = ranked ? [...rows].sort((first, second) => second.amount - first.amount) : rows;
+  const [min, max] = ordered.reduce(([bottom, top], row) =>
+    [Math.min(bottom, row.amount), Math.max(top, row.amount)], [0, 0]);
+  const range = max - min || 1;
+  let rank = 0;
+  const bars = ordered.map((row, index) => {
+    if (row.amount !== ordered[index - 1]?.amount) rank = index + 1;
+    const width = (Math.abs(row.amount) / range * 100).toFixed(2);
+    const offset = ((Math.min(row.amount, 0) - min) / range * 100).toFixed(2);
+    const people = Number.isSafeInteger(row.salespersonCount) ? `<small>${row.salespersonCount} 位業務</small>` : '';
+    return `<li>
+      <div class="report-bar-label">
+        <span>${ranked ? `<span class="report-rank">${rank}.</span> ` : ''}${escapeHtml(row.name)} ${people}</span>
+        <strong>${amountFormat.format(row.amount)}</strong>
+      </div>
+      <div class="report-bar-track" aria-hidden="true">
+        <span style="inline-size:${width}%;inset-inline-start:${offset}%"></span>
+      </div>
+    </li>`;
+  });
+  return `<section class="report-chart"><h3>${title}</h3><ul>${bars.join('')}</ul></section>`;
+}
+
+export function renderPerformanceReport(month, totalAmount, overview) {
+  const monthLabel = `${Number(month.slice(0, 4))} 年 ${Number(month.slice(5))} 月`;
+  let scopeLabel = '個人';
+  let charts = '';
+  if (overview?.scope === 'personal' && validChartRows(overview.periods)) {
+    charts = reportChart('月內分段業績', overview.periods);
+  } else if (overview?.scope === 'region' || overview?.scope === 'company') {
+    const company = overview.scope === 'company';
+    if (!validChartRows(overview.salespeople) || (company && !validChartRows(overview.supervisors))
+      || typeof overview.scopeLabel !== 'string' || !overview.scopeLabel.trim()) {
+      throw new Error('查詢結果格式不正確，請稍後再試。');
+    }
+    scopeLabel = overview.scopeLabel;
+    charts = reportChart(company ? '全體業務排名' : '區域業務排名', overview.salespeople, true);
+    if (company) charts += reportChart('各主管團隊業績', overview.supervisors, true);
+  } else if (overview != null) {
+    throw new Error('查詢結果格式不正確，請稍後再試。');
+  }
+  return `<div class="report-total">
+    <p>${monthLabel} · ${escapeHtml(scopeLabel)}跟刀業績合計</p>
+    ${overview?.pilot === true ? '<p>試用範圍 · 已指定的測試員工</p>' : ''}
+    <strong>${amountFormat.format(totalAmount)}</strong>
+  </div>${charts}`;
+}
+
 function bindRecords(root, request, page, refreshCustody) {
   const readOnly = root.hasAttribute('data-read-only');
   const form = root.querySelector('[data-records]');
@@ -329,6 +385,7 @@ function bindRecords(root, request, page, refreshCustody) {
   const monthInput = form.elements.namedItem('month');
   const status = root.querySelector('[data-list-status]');
   const list = root.querySelector('[data-results]');
+  const report = root.querySelector('[data-report-summary]');
   const next = root.querySelector('[data-next]');
   const pending = root.querySelector('[data-pending-results]');
   const pendingStatus = root.querySelector('[data-pending-status]');
@@ -410,6 +467,7 @@ function bindRecords(root, request, page, refreshCustody) {
     if (more && (!cursor || month !== loadedMonth)) return;
     if (!more) {
       list.replaceChildren();
+      report?.replaceChildren();
       pending?.replaceChildren();
       pendingScan += 1;
       if (pendingLink) pendingLink.hidden = true;
@@ -425,6 +483,14 @@ function bindRecords(root, request, page, refreshCustody) {
     try {
       const result = await queryRecords(month, more ? cursor : null);
       const { records, nextCursor, totalAmount } = result;
+      const teamReport = page === 'report' && ['region', 'company'].includes(result.overview?.scope);
+      if (teamReport && (records.length || nextCursor != null)) {
+        throw new Error('查詢結果格式不正確，請稍後再試。');
+      }
+      if (report && !more) {
+        report.innerHTML = renderPerformanceReport(month, totalAmount, result.overview);
+        if (!teamReport && records.length) list.innerHTML = '<h3>我的跟刀明細</h3>';
+      }
       if (page === 'transfer' && typeof result.senderName === 'string' && result.senderName.trim()) {
         const entry = root.querySelector('[data-entry]');
         if (entry) {
@@ -435,13 +501,10 @@ function bindRecords(root, request, page, refreshCustody) {
       loadedMonth = month;
       cursor = nextCursor || null;
       next.hidden = !cursor;
-      const summary = page === 'report' && !more
-        ? `<p class="notice">${escapeHtml(month)} 跟刀業績合計　<strong>${amountFormat.format(totalAmount)}</strong></p>`
-        : '';
       const history = pending ? records.filter((row) => row.awaitingMe !== true) : records;
       if (pending && !more) void scanPending(result, pendingScan);
-      list.insertAdjacentHTML('beforeend', summary + history.map((row) => recordCard(page, row, readOnly)).join(''));
-      status.textContent = !more && !history.length
+      list.insertAdjacentHTML('beforeend', history.map((row) => recordCard(page, row, readOnly)).join(''));
+      status.textContent = !more && !history.length && !teamReport
         ? (page === 'transfer' ? '目前沒有其他交接紀錄。' : '查無紀錄。') : '';
     } catch (error) {
       status.textContent = error.message;
