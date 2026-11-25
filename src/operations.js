@@ -413,19 +413,47 @@ function bindReportDownload(element, report) {
   const button = element.querySelector('[data-report-download]');
   const result = element.querySelector('[data-report-images]');
   button.addEventListener('click', () => {
+    let images;
     try {
-      const images = createReportImages(report);
-      result.innerHTML = `<p role="status">${images.length > 1 ? '報表分成多張圖片，可分別下載。'
-        : '若 LINE 未儲存檔案，可展開預覽並長按圖片儲存。'}</p>
-        ${images.map(({ dataUrl, filename }, index) => `<details>
-          <summary>預覽圖表${images.length > 1 ? ` ${index + 1}` : ''}</summary>
-          <img alt="月報圖表 ${index + 1}" src="${dataUrl}">
-          <a class="secondary" href="${dataUrl}" download="${filename}">下載這張圖表</a>
-        </details>`).join('')}`;
-      if (images.length === 1) result.querySelector('[download]').click();
+      images = createReportImages(report);
     } catch {
       result.innerHTML = '<p role="status">目前無法產生圖表圖片，請稍後再試。</p>';
+      return;
     }
+
+    result.innerHTML = `<p role="status" data-report-save-status>可長按下方圖片儲存，或點「下載這張圖表」。</p>
+      ${images.map(({ dataUrl, filename }, index) => `<section>
+        ${images.length > 1 ? `<p>第 ${index + 1}／${images.length} 張</p>` : ''}
+        <img alt="月報圖表 ${index + 1}" src="${dataUrl}">
+        <button class="secondary" type="button" data-report-share hidden>分享／儲存圖片</button>
+        <a class="secondary" href="${dataUrl}" download="${filename}">下載這張圖表</a>
+      </section>`).join('')}`;
+
+    if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return;
+    const status = result.querySelector('[data-report-save-status]');
+    result.querySelectorAll('[data-report-share]').forEach((shareButton, index) => {
+      const { dataUrl, filename } = images[index];
+      let shareData;
+      try {
+        const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+        const bytes = Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
+        shareData = { files: [new File([bytes], filename, { type: 'image/png' })] };
+        if (!navigator.canShare(shareData)) return;
+      } catch {
+        return;
+      }
+
+      shareButton.hidden = false;
+      shareButton.addEventListener('click', async () => {
+        try {
+          await navigator.share(shareData);
+        } catch (error) {
+          if (error.name !== 'AbortError') {
+            status.textContent = '目前無法開啟分享選單。請長按圖片儲存，或點「下載這張圖表」。';
+          }
+        }
+      });
+    });
   });
 }
 
