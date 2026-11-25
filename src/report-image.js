@@ -44,7 +44,7 @@ export function createReportImages(report) {
     ctx.fillStyle = '#eaf3f9';
     ctx.fillRect(0, 0, width, 210);
 
-    writeText(ctx, '捷旭AI智慧助理', margin, 46, '700 24px sans-serif', '#246694', contentWidth);
+    writeText(ctx, `捷旭AI智慧助理 · ${report.roleLabel}`, margin, 46, '700 24px sans-serif', '#246694', contentWidth);
     writeText(ctx, report.heading, margin, 94, '700 36px sans-serif', '#163859', contentWidth);
     writeText(ctx, report.total, margin, 152, '700 46px sans-serif', '#163859', contentWidth);
     const info = [report.updated, report.pilot ? '試用範圍' : '', pages.length > 1 ? `第 ${index + 1}／${pages.length} 張` : ''];

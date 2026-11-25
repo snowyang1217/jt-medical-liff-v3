@@ -1,5 +1,5 @@
 import { callApi } from './api.js?v=20261125-liff-reliability';
-import { createReportImages } from './report-image.js?v=20261125-monthly-export';
+import { createReportImages } from './report-image.js?v=20261125-report-scope';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -353,7 +353,8 @@ function reportChart(title, rows, ranked = false) {
 
 export function performanceReport(month, totalAmount, overview, queriedAt = new Date()) {
   const monthLabel = `${Number(month.slice(0, 4))} 年 ${Number(month.slice(5))} 月`;
-  let scopeLabel = '個人';
+  let roleLabel = '個人月報';
+  let scopeLabel = '個人跟刀業績合計';
   const charts = [];
   if (overview?.scope === 'personal' && validChartRows(overview.periods)) {
     charts.push(reportChart('月內分段業績', overview.periods));
@@ -363,15 +364,18 @@ export function performanceReport(month, totalAmount, overview, queriedAt = new 
       || typeof overview.scopeLabel !== 'string' || !overview.scopeLabel.trim()) {
       throw new Error('查詢結果格式不正確，請稍後再試。');
     }
-    scopeLabel = overview.scopeLabel;
-    charts.push(reportChart(company ? '全體業務排名' : '區域業務排名', overview.salespeople, true));
+    const name = overview.scopeLabel.trim();
+    roleLabel = company ? '老闆月報' : '主管月報';
+    scopeLabel = company ? `${name}全區跟刀業績合計` : `${name}區域跟刀業績合計`;
+    charts.push(reportChart(company ? '全體業務排名' : `${name}業務人員業績排名`, overview.salespeople, true));
     if (company) charts.push(reportChart('各主管團隊業績', overview.supervisors, true));
   } else if (overview != null) {
     throw new Error('查詢結果格式不正確，請稍後再試。');
   }
   return {
     month,
-    heading: `${monthLabel} · ${scopeLabel}跟刀業績合計`,
+    roleLabel,
+    heading: `${monthLabel} · ${scopeLabel}`,
     total: amountFormat.format(totalAmount),
     updated: `查詢時間 ${reportTimeFormat.format(queriedAt)}`,
     pilot: overview?.pilot === true,
@@ -391,10 +395,11 @@ function renderPerformanceReport(report) {
         <span style="inline-size:${row.width.toFixed(2)}%;inset-inline-start:${row.offset.toFixed(2)}%"></span>
       </div>
     </li>`);
-    return `<section class="report-chart"><h3>${title}</h3>
+    return `<section class="report-chart"><h3>${escapeHtml(title)}</h3>
       ${bars.length ? `<ul>${bars.join('')}</ul>` : '<p>目前沒有可顯示的人員。</p>'}</section>`;
   });
   return `<div class="report-total">
+    <p>${report.roleLabel}</p>
     <p>${escapeHtml(report.heading)}</p>
     ${report.pilot ? '<p>試用範圍 · 已指定的測試員工</p>' : ''}
     <strong>${report.total}</strong>
