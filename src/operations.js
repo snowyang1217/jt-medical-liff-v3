@@ -1,4 +1,4 @@
-import { callApi } from './api.js?v=20261125-liff-reliability';
+import { callApi } from './api.js?v=20261125-owner-pilot';
 import { createReportImages } from './report-image.js?v=20261125-report-scope';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({

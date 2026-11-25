@@ -33,9 +33,13 @@ export async function callApi(action, payload = {}) {
   }
   if (response.status === 403) throw new Error('這個 LINE 帳號尚未取得此功能的使用權限。');
   if (!response.ok) throw new Error(unavailable);
-  const data = await response.json().catch(() => {
+  const result = await response.json().catch(() => {
     throw new Error(unavailable);
   });
+  const isPilotReport = action === 'LIST_OWN_RECORDS' && payload.model === 'performance'
+    && result?.type === 'ir.actions.client' && result?.tag === 'jt_line_performance_result'
+    && result.params?.overview?.scope === 'company' && result.params.overview.pilot === true;
+  const data = isPilotReport ? result.params : result;
   if (data?.ok === false) {
     const message = typeof data.message === 'string' ? data.message.trim() : '';
     throw new Error(message || '資料處理失敗。');
