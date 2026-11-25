@@ -49,7 +49,6 @@ async function sendFunctionName(label, page) {
   const liff = window.liff;
   try {
     if (!liff?.isInClient() || liff.getContext()?.type !== 'utou') {
-      showChatNotice(page, '若要在對話留下功能名稱，請在手機 LINE 的一對一對話裡點開 LIFF 連結。');
       return;
     }
 
