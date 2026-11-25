@@ -1,4 +1,4 @@
-import { callApi } from './api.js?v=20261123b';
+import { callApi } from './api.js?v=20261125-liff-reliability';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -339,11 +339,66 @@ function bindRecords(root, request, page, refreshCustody) {
     heading.focus({ preventScroll: true });
     heading.scrollIntoView({ block: 'start' });
   });
-  let pendingCount = 0;
+  let pendingScan = 0;
   let cursor = null;
   let loadedMonth = '';
   let loading = false;
   const model = page === 'report' ? 'performance' : page;
+
+  const queryRecords = async (month, after) => {
+    const result = await request('LIST_OWN_RECORDS', {
+      model, data: { ...(month ? { month } : {}), ...(after ? { cursor: after } : {}) }
+    });
+    const pageData = page === 'forecast' ? forecastRecords(result)
+      : page === 'transfer' ? transferRecords(result) : result;
+    const { records, nextCursor, totalAmount } = pageData;
+    if (!Array.isArray(records) || records.some((row) => !validRow(page, row))
+      || (nextCursor != null && (typeof nextCursor !== 'string' || !nextCursor))
+      || (page === 'report' && !after && !Number.isFinite(totalAmount))
+      || (page === 'report' && records.some((row) => !isCalendarDate(row.date) || row.date.slice(0, 7) !== month))) {
+      throw new Error('查詢結果格式不正確，請稍後再試。');
+    }
+    return { ...pageData, employeeId: result.employeeId, senderName: result.senderName };
+  };
+
+  const scanPending = async (firstPage, scan) => {
+    const { employeeId } = firstPage;
+    if (!isId(employeeId)) {
+      pendingStatus.textContent = '目前無法辨識待接收交接，請查看下方紀錄。';
+      return;
+    }
+
+    const pendingIds = new Set();
+    const checkedCursors = new Set();
+    const stillCurrent = () => root.isConnected && pendingScan === scan;
+    let result = firstPage;
+    try {
+      while (stillCurrent()) {
+        const incoming = result.records.filter((row) => {
+          if (row.awaitingMe !== true || pendingIds.has(row.id)) return false;
+          pendingIds.add(row.id);
+          return true;
+        });
+        pending.insertAdjacentHTML('beforeend', incoming.map((row) => recordCard(page, row, readOnly)).join(''));
+        const count = pendingIds.size;
+        pendingLink.hidden = count === 0;
+        pendingLink.textContent = count ? `${count} 筆交接待接收` : '';
+
+        const after = result.nextCursor;
+        if (!after) {
+          pendingStatus.textContent = count ? '' : '目前沒有待接收的交接。';
+          return;
+        }
+        pendingStatus.textContent = '正在檢查較早的待接收交接…';
+        if (checkedCursors.has(after)) throw new Error('交接紀錄分頁重複。');
+        checkedCursors.add(after);
+        result = await queryRecords('', after);
+        if (result.employeeId !== employeeId) throw new Error('無法核對交接接收人。');
+      }
+    } catch {
+      if (stillCurrent()) pendingStatus.textContent = '未能查完待接收交接，請更新交接紀錄再試。';
+    }
+  };
 
   const load = async (more = false) => {
     if (loading) return;
@@ -356,7 +411,7 @@ function bindRecords(root, request, page, refreshCustody) {
     if (!more) {
       list.replaceChildren();
       pending?.replaceChildren();
-      pendingCount = 0;
+      pendingScan += 1;
       if (pendingLink) pendingLink.hidden = true;
       if (pendingStatus) pendingStatus.textContent = '查詢中…';
       cursor = null;
@@ -368,17 +423,8 @@ function bindRecords(root, request, page, refreshCustody) {
     if (page === 'report') monthInput.disabled = true;
     status.textContent = '查詢中…';
     try {
-      const result = await request('LIST_OWN_RECORDS', {
-        model, data: { ...(month ? { month } : {}), ...(more ? { cursor } : {}) }
-      });
-      const { records, nextCursor, totalAmount } = page === 'forecast' ? forecastRecords(result)
-        : page === 'transfer' ? transferRecords(result) : result;
-      if (!Array.isArray(records) || records.some((row) => !validRow(page, row))
-        || (nextCursor != null && (typeof nextCursor !== 'string' || !nextCursor))
-        || (page === 'report' && !more && !Number.isFinite(totalAmount))
-        || (page === 'report' && records.some((row) => !isCalendarDate(row.date) || row.date.slice(0, 7) !== month))) {
-        throw new Error('查詢結果格式不正確，請稍後再試。');
-      }
+      const result = await queryRecords(month, more ? cursor : null);
+      const { records, nextCursor, totalAmount } = result;
       if (page === 'transfer' && typeof result.senderName === 'string' && result.senderName.trim()) {
         const entry = root.querySelector('[data-entry]');
         if (entry) {
@@ -392,18 +438,8 @@ function bindRecords(root, request, page, refreshCustody) {
       const summary = page === 'report' && !more
         ? `<p class="notice">${escapeHtml(month)} 跟刀業績合計　<strong>${amountFormat.format(totalAmount)}</strong></p>`
         : '';
-      const incoming = pending ? records.filter((row) => row.awaitingMe === true) : [];
       const history = pending ? records.filter((row) => row.awaitingMe !== true) : records;
-      if (pending) {
-        pending.insertAdjacentHTML('beforeend', incoming.map((row) =>
-          recordCard(page, row, readOnly)).join(''));
-        pendingCount += incoming.length;
-        pendingLink.hidden = pendingCount === 0;
-        pendingLink.textContent = pendingCount ? `${pendingCount} 筆交接待接收` : '';
-        pendingStatus.textContent = !isId(result.employeeId) ? '目前無法辨識待接收交接，請查看下方紀錄。'
-          : pendingCount ? (cursor ? '下方可載入較早的紀錄。' : '')
-          : cursor ? '目前載入的紀錄沒有待接收交接。' : '目前沒有待接收的交接。';
-      }
+      if (pending && !more) void scanPending(result, pendingScan);
       list.insertAdjacentHTML('beforeend', summary + history.map((row) => recordCard(page, row, readOnly)).join(''));
       status.textContent = !more && !history.length
         ? (page === 'transfer' ? '目前沒有其他交接紀錄。' : '查無紀錄。') : '';

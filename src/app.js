@@ -1,8 +1,8 @@
-import { getProfile, callApi } from './api.js?v=20261123b';
+import { getProfile, callApi } from './api.js?v=20261125-liff-reliability';
 import { shell, homeView, inventoryView, inventoryResults, tenderView, tenderResults, loadingView } from './views.js?v=20261125-brand-title';
 
 import { CONFIG } from './config.js?v=20261125-ai-assistant';
-import { operationView, bindOperation } from './operations.js?v=20261124-transfer-receive';
+import { operationView, bindOperation } from './operations.js?v=20261125-liff-reliability';
 
 const app = document.querySelector('#app');
 let profile = null;
@@ -20,7 +20,8 @@ function launchedPage() {
       statePage = stateUrl.searchParams.get('page') || stateUrl.hash.replace('#', '');
     } catch { /* Use the default page if LINE sends an unreadable state. */ }
   }
-  const page = directPage || statePage || location.hash.replace('#', '') || 'home';
+  const hashPage = location.hash.slice(1);
+  const page = (availablePages.has(hashPage) ? hashPage : '') || directPage || statePage || 'home';
   return availablePages.has(page) ? page : 'home';
 }
 
@@ -38,7 +39,11 @@ function render(page = currentPage) {
   bindEvents();
 }
 
-function navigate(page) { window.location.hash = page === 'home' ? '' : `#${page}`; render(page); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+function navigate(page) {
+  window.location.hash = page;
+  render(page);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
 
 async function sendFunctionName(label, page) {
   const liff = window.liff;
@@ -166,7 +171,7 @@ async function start() {
   }
 }
 window.addEventListener('hashchange', () => {
-  const page = location.hash.slice(1) || 'home';
+  const page = launchedPage();
   if (profile && page !== currentPage) render(page);
 });
 start();
