@@ -1,5 +1,5 @@
 import { callApi } from './api.js?v=20261125-owner-pilot';
-import { createReportImages } from './report-image.js?v=20261125-report-scope';
+import { createReportImages } from './report-image.js?v=20261126-performance-fields';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -42,9 +42,21 @@ function lookup(name, label) {
   </div>`;
 }
 
-function input(name, label, type, properties = '') {
-  return `<label class="field"><span>${label}<b>＊</b></span>
-    <input name="${name}" type="${type}" ${properties} required /></label>`;
+function input(name, label, type, properties = '', required = true) {
+  return `<label class="field"><span>${label}${required ? '<b>＊</b>' : ''}</span>
+    <input name="${name}" type="${type}" ${properties}${required ? ' required' : ''} /></label>`;
+}
+
+const performanceDepartments = [
+  '疼痛科', '復健科', '骨科', '外科', '神經外科',
+  '耳鼻喉科', '婦產科', '胸腔外科', '大直外科', '一般外科'
+];
+
+function performanceDepartmentField() {
+  return `<label class="field"><span>科別</span><select name="department">
+    <option value="">請選擇科別</option>
+    ${performanceDepartments.map((name) => `<option>${name}</option>`).join('')}
+  </select></label>`;
 }
 
 function recordsView(page) {
@@ -88,9 +100,11 @@ export function operationView(page, profile, { allowTransferWrites = false } = {
     </label>` + lookup('receiverId', '接收人')
       + input('plannedDate', '預計交接日期', 'date'),
     performance: input('serviceDate', '跟刀日期', 'date', `value="${today()}"`)
-      + lookup('hospitalId', '客戶／醫院') + lookup('productId', '產品')
-      + input('quantity', '數量', 'number', 'min="0" step="any"')
-      + input('amount', '業績金額（TWD）', 'number', 'min="0" step="0.01"')
+      + lookup('hospitalId', '客戶／醫院') + performanceDepartmentField()
+      + input('doctor', '醫師', 'text', 'maxlength="100"', false)
+      + lookup('productId', '產品') + input('quantity', '數量', 'number', 'min="0" step="any"')
+      + input('unitPrice', '單價（TWD）', 'number', 'min="0" step="0.01"', false)
+      + input('amount', '發票價（TWD）', 'number', 'min="0" step="0.01"')
   };
   return `<section data-operation="${page}"${readOnly ? ' data-read-only' : ''}>
     <div class="page-head"><button class="back" data-page="home" aria-label="回首頁">‹</button><div><h1>${titles[page]}</h1></div></div>
@@ -123,15 +137,23 @@ export function entryValues(page, values) {
       const id = Number(value);
       if (!isId(id)) throw new Error('請從查詢結果選擇資料。');
       data[name] = id;
-    } else if (name === 'quantity' || name === 'amount') {
+    } else if (name === 'quantity' || name === 'amount' || name === 'unitPrice') {
+      if (name === 'unitPrice' && !value) continue;
       const number = Number(value);
       if (!value || !Number.isFinite(number) || number < 0 || (name === 'quantity' && number === 0)) {
         throw new Error(name === 'quantity' ? '數量須大於零。' : '請輸入有效的業績金額。');
       }
-      if (name === 'amount' && page === 'performance' && !/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(value)) {
+      if (name !== 'quantity' && page === 'performance' && !/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(value)) {
         throw new Error('請輸入最多兩位小數的新台幣金額。');
       }
       data[name] = number;
+    } else if (name === 'doctor') {
+      const doctor = value.trim();
+      if (doctor.length > 100) throw new Error('醫師姓名最多 100 字。');
+      if (doctor) data.doctor = doctor;
+    } else if (name === 'department') {
+      if (value && !performanceDepartments.includes(value)) throw new Error('請選擇有效的科別。');
+      if (value) data.department = value;
     } else if (name !== 'note') {
       data[name] = value;
     }
@@ -272,8 +294,12 @@ function recordCard(page, row, readOnly) {
     <p>預估月份　${escapeHtml(row.date?.slice(0, 7))}</p><p>預估數量　${quantityFormat.format(row.quantity)}</p>
     <p>狀態　${escapeHtml(row.status)}</p>${note}</div></article>`;
   if (page === 'report') return `<article class="record-card"><div><strong>${title}</strong>
-    <p>${date}　${escapeHtml(row.hospital)}</p><p>數量　${quantityFormat.format(row.quantity)}</p>
-    <p>業績金額　${amountFormat.format(row.amount)}</p></div></article>`;
+    <p>${date}　${escapeHtml(row.hospital)}</p>
+    ${row.department ? `<p>科別　${escapeHtml(row.department)}</p>` : ''}
+    ${row.doctor ? `<p>醫師　${escapeHtml(row.doctor)}</p>` : ''}
+    <p>數量　${quantityFormat.format(row.quantity)}</p>
+    ${Number.isFinite(row.unitPrice) ? `<p>單價　${amountFormat.format(row.unitPrice)}</p>` : ''}
+    <p>發票價　${amountFormat.format(row.amount)}</p></div></article>`;
   return `<article class="record-card"><div><strong>${title}</strong><p>預計交接日期　${date}</p>
     <p>交接人　${escapeHtml(row.sender)}　接收人　${escapeHtml(row.receiver)}</p>
     ${row.custodian ? `<p>目前保管人　${escapeHtml(row.custodian)}</p>` : ''}
@@ -402,6 +428,7 @@ function renderPerformanceReport(report) {
     <p>${report.roleLabel}</p>
     <p>${escapeHtml(report.heading)}</p>
     ${report.pilot ? '<p>試用範圍 · 已指定的測試員工</p>' : ''}
+    <p>發票價合計（TWD）</p>
     <strong>${report.total}</strong>
     <p class="report-updated">${escapeHtml(report.updated)}</p>
     <button class="secondary" type="button" data-report-download>下載圖表（PNG）</button>
