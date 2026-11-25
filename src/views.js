@@ -8,7 +8,7 @@ export function shell(profile, page, content, availablePages) {
   return html`
     <main class="app-shell">
       <header class="topbar">
-        <button class="brand" data-page="home" aria-label="回首頁"><span class="brand-mark">J</span><span>捷旭醫療</span></button>
+        <button class="brand" data-page="home" aria-label="回首頁"><span class="brand-mark">J</span><span>捷旭AI智慧助理</span></button>
         <div class="user-chip"><span>${escapeHtml(profile.company)}</span><strong>${escapeHtml(profile.name)}</strong></div>
       </header>
       <section class="page">${content}</section>
