@@ -10,10 +10,16 @@ export async function callApi(action, payload = {}) {
 
   if (!CONFIG.makeWebhookUrl) throw new Error('系統連線尚未設定，請聯絡管理者。');
 
+  const isWrite = action === 'CREATE_RECORD' || action === 'RESPOND_TRANSFER';
+  const unavailable = isWrite
+    ? '目前無法確認是否處理成功，請先更新紀錄再重試。'
+    : '系統暫時無法連線，請稍後再試。';
   const response = await fetch(CONFIG.makeWebhookUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, ...payload })
+  }).catch(() => {
+    throw new Error(unavailable);
   });
 
   if (response.status === 401) {
@@ -26,9 +32,15 @@ export async function callApi(action, payload = {}) {
     throw new Error('這個 LINE 帳號尚未取得標案查詢權限。');
   }
   if (response.status === 403) throw new Error('這個 LINE 帳號尚未取得此功能的使用權限。');
-  if (!response.ok) throw new Error('系統暫時無法連線，請稍後再試。');
-  const data = await response.json();
-  if (data?.ok !== true) throw new Error(data?.message || '資料處理失敗。');
+  if (!response.ok) throw new Error(unavailable);
+  const data = await response.json().catch(() => {
+    throw new Error(unavailable);
+  });
+  if (data?.ok === false) {
+    const message = typeof data.message === 'string' ? data.message.trim() : '';
+    throw new Error(message || '資料處理失敗。');
+  }
+  if (data?.ok !== true) throw new Error(unavailable);
   return data;
 }
 
