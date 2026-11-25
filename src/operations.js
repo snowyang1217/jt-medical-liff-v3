@@ -1,4 +1,5 @@
 import { callApi } from './api.js?v=20261125-liff-reliability';
+import { createReportImages } from './report-image.js?v=20261125-monthly-export';
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (char) => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
@@ -12,6 +13,10 @@ const taipeiDateFormat = new Intl.DateTimeFormat('sv-SE', {
 });
 const today = () => taipeiDateFormat.format();
 const currentMonth = () => today().slice(0, 7);
+const reportTimeFormat = new Intl.DateTimeFormat('zh-TW', {
+  timeZone: 'Asia/Taipei', month: '2-digit', day: '2-digit',
+  hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+});
 
 function isCalendarDate(date) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date.startsWith('0000')) return false;
@@ -47,7 +52,7 @@ function recordsView(page) {
   const title = page === 'transfer' ? '我的交接紀錄' : page === 'forecast' ? '我的預估紀錄' : '跟刀業績月報';
   const monthField = page === 'transfer' ? '' : input('month', '查詢月份', 'month', `value="${currentMonth()}"`);
   return `<section aria-label="${title}"><h2>${title}</h2>
-    <form data-records>${monthField}<button class="primary" type="submit">${page === 'transfer' ? '更新交接紀錄' : '查詢'}</button></form>
+    <form data-records>${monthField}<button class="primary" type="submit">${page === 'transfer' ? '更新交接紀錄' : page === 'report' ? '查詢最新業績' : '查詢'}</button></form>
     <p class="empty" data-list-status role="status"></p>
     ${page === 'report' ? '<div data-report-summary></div>' : ''}
     <div class="list" data-results></div>
@@ -328,36 +333,30 @@ function validChartRows(rows) {
 }
 
 function reportChart(title, rows, ranked = false) {
-  if (!rows.length) return `<section class="report-chart"><h3>${title}</h3><p>目前沒有可顯示的人員。</p></section>`;
   const ordered = ranked ? [...rows].sort((first, second) => second.amount - first.amount) : rows;
   const [min, max] = ordered.reduce(([bottom, top], row) =>
     [Math.min(bottom, row.amount), Math.max(top, row.amount)], [0, 0]);
   const range = max - min || 1;
   let rank = 0;
-  const bars = ordered.map((row, index) => {
+  return { title, rows: ordered.map((row, index) => {
     if (row.amount !== ordered[index - 1]?.amount) rank = index + 1;
-    const width = (Math.abs(row.amount) / range * 100).toFixed(2);
-    const offset = ((Math.min(row.amount, 0) - min) / range * 100).toFixed(2);
-    const people = Number.isSafeInteger(row.salespersonCount) ? `<small>${row.salespersonCount} 位業務</small>` : '';
-    return `<li>
-      <div class="report-bar-label">
-        <span>${ranked ? `<span class="report-rank">${rank}.</span> ` : ''}${escapeHtml(row.name)} ${people}</span>
-        <strong>${amountFormat.format(row.amount)}</strong>
-      </div>
-      <div class="report-bar-track" aria-hidden="true">
-        <span style="inline-size:${width}%;inset-inline-start:${offset}%"></span>
-      </div>
-    </li>`;
-  });
-  return `<section class="report-chart"><h3>${title}</h3><ul>${bars.join('')}</ul></section>`;
+    return {
+      name: row.name,
+      rank: ranked ? rank : 0,
+      amountLabel: amountFormat.format(row.amount),
+      people: Number.isSafeInteger(row.salespersonCount) ? `${row.salespersonCount} 位業務` : '',
+      width: Math.abs(row.amount) / range * 100,
+      offset: (Math.min(row.amount, 0) - min) / range * 100
+    };
+  }) };
 }
 
-export function renderPerformanceReport(month, totalAmount, overview) {
+export function performanceReport(month, totalAmount, overview, queriedAt = new Date()) {
   const monthLabel = `${Number(month.slice(0, 4))} 年 ${Number(month.slice(5))} 月`;
   let scopeLabel = '個人';
-  let charts = '';
+  const charts = [];
   if (overview?.scope === 'personal' && validChartRows(overview.periods)) {
-    charts = reportChart('月內分段業績', overview.periods);
+    charts.push(reportChart('月內分段業績', overview.periods));
   } else if (overview?.scope === 'region' || overview?.scope === 'company') {
     const company = overview.scope === 'company';
     if (!validChartRows(overview.salespeople) || (company && !validChartRows(overview.supervisors))
@@ -365,16 +364,64 @@ export function renderPerformanceReport(month, totalAmount, overview) {
       throw new Error('查詢結果格式不正確，請稍後再試。');
     }
     scopeLabel = overview.scopeLabel;
-    charts = reportChart(company ? '全體業務排名' : '區域業務排名', overview.salespeople, true);
-    if (company) charts += reportChart('各主管團隊業績', overview.supervisors, true);
+    charts.push(reportChart(company ? '全體業務排名' : '區域業務排名', overview.salespeople, true));
+    if (company) charts.push(reportChart('各主管團隊業績', overview.supervisors, true));
   } else if (overview != null) {
     throw new Error('查詢結果格式不正確，請稍後再試。');
   }
+  return {
+    month,
+    heading: `${monthLabel} · ${scopeLabel}跟刀業績合計`,
+    total: amountFormat.format(totalAmount),
+    updated: `查詢時間 ${reportTimeFormat.format(queriedAt)}`,
+    pilot: overview?.pilot === true,
+    charts
+  };
+}
+
+function renderPerformanceReport(report) {
+  const charts = report.charts.map(({ title, rows }) => {
+    const bars = rows.map((row) => `<li>
+      <div class="report-bar-label">
+        <span>${row.rank ? `<span class="report-rank">${row.rank}.</span> ` : ''}${escapeHtml(row.name)}
+          ${row.people ? `<small>${row.people}</small>` : ''}</span>
+        <strong>${row.amountLabel}</strong>
+      </div>
+      <div class="report-bar-track" aria-hidden="true">
+        <span style="inline-size:${row.width.toFixed(2)}%;inset-inline-start:${row.offset.toFixed(2)}%"></span>
+      </div>
+    </li>`);
+    return `<section class="report-chart"><h3>${title}</h3>
+      ${bars.length ? `<ul>${bars.join('')}</ul>` : '<p>目前沒有可顯示的人員。</p>'}</section>`;
+  });
   return `<div class="report-total">
-    <p>${monthLabel} · ${escapeHtml(scopeLabel)}跟刀業績合計</p>
-    ${overview?.pilot === true ? '<p>試用範圍 · 已指定的測試員工</p>' : ''}
-    <strong>${amountFormat.format(totalAmount)}</strong>
-  </div>${charts}`;
+    <p>${escapeHtml(report.heading)}</p>
+    ${report.pilot ? '<p>試用範圍 · 已指定的測試員工</p>' : ''}
+    <strong>${report.total}</strong>
+    <p class="report-updated">${escapeHtml(report.updated)}</p>
+    <button class="secondary" type="button" data-report-download>下載圖表（PNG）</button>
+    <div data-report-images></div>
+  </div>${charts.join('')}`;
+}
+
+function bindReportDownload(element, report) {
+  const button = element.querySelector('[data-report-download]');
+  const result = element.querySelector('[data-report-images]');
+  button.addEventListener('click', () => {
+    try {
+      const images = createReportImages(report);
+      result.innerHTML = `<p role="status">${images.length > 1 ? '報表分成多張圖片，可分別下載。'
+        : '若 LINE 未儲存檔案，可展開預覽並長按圖片儲存。'}</p>
+        ${images.map(({ dataUrl, filename }, index) => `<details>
+          <summary>預覽圖表${images.length > 1 ? ` ${index + 1}` : ''}</summary>
+          <img alt="月報圖表 ${index + 1}" src="${dataUrl}">
+          <a class="secondary" href="${dataUrl}" download="${filename}">下載這張圖表</a>
+        </details>`).join('')}`;
+      if (images.length === 1) result.querySelector('[download]').click();
+    } catch {
+      result.innerHTML = '<p role="status">目前無法產生圖表圖片，請稍後再試。</p>';
+    }
+  });
 }
 
 function bindRecords(root, request, page, refreshCustody) {
@@ -488,7 +535,9 @@ function bindRecords(root, request, page, refreshCustody) {
         throw new Error('查詢結果格式不正確，請稍後再試。');
       }
       if (report && !more) {
-        report.innerHTML = renderPerformanceReport(month, totalAmount, result.overview);
+        const reportData = performanceReport(month, totalAmount, result.overview);
+        report.innerHTML = renderPerformanceReport(reportData);
+        bindReportDownload(report, reportData);
         if (!teamReport && records.length) list.innerHTML = '<h3>我的跟刀明細</h3>';
       }
       if (page === 'transfer' && typeof result.senderName === 'string' && result.senderName.trim()) {

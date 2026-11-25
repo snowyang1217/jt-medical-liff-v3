@@ -94,3 +94,23 @@
   border-radius: inherit;
   background: #246694;
 }
+
+.report-total .report-updated {
+  margin-block: 8px 12px;
+  font-size: .875rem;
+}
+
+[data-report-images]:not(:empty) {
+  margin-top: 12px;
+  font-size: .875rem;
+}
+
+[data-report-images] details {
+  margin-top: 8px;
+}
+
+[data-report-images] img {
+  display: block;
+  max-width: 100%;
+  margin: 8px 0;
+}
