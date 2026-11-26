@@ -102,27 +102,68 @@ elif operation == "LIST_OWN_RECORDS":
         ("x_studio_date_1", ">=", month_start.isoformat()),
         ("x_studio_date_1", "<", next_month.isoformat()),
     ]
-    page_records = month_records + ([("id", "<", int(cursor))] if cursor is not None else [])
-    page = performance.search(page_records, limit=51, order="id desc")
-    rows = page[:50]
-    result = {
-        "ok": True,
-        "records": [{
-            "id": row.id,
-            "label": row.x_studio_many2one_3.display_name or row.x_name,
-            "date": row.x_studio_date_1.isoformat(),
-            "hospital": row.x_studio_many2one_2.display_name or "",
-            "quantity": row.x_studio_float_1,
-            "department": department_options.get(row.x_studio_selection_1, ""),
-            "doctor": row.x_studio_char_1 or "",
-            "unitPrice": row.x_studio_twd if row.x_studio_twd and row[unit_currency_field] == currency else None,
-            "amount": row.x_studio_monetary_1,
-        } for row in rows],
-        "nextCursor": str(rows[-1].id) if len(page) > 50 else None,
-    }
-    if cursor is None:
-        totals = performance._read_group(month_records, [], ["x_studio_monetary_1:sum"])
-        result["totalAmount"] = round(totals[0][0] or 0, 2) if totals else 0
+    can_view_team = False
+    if employee_id == 3 and employee.name == "Amy_test" and employee.x_studio_boolean_1 and company_key == "捷旭":
+        staff = env["hr.employee"].with_context(allowed_company_ids=[company_id], lang="zh_TW")
+        role_field = "x_studio_selection_2"
+        access_field = "x_studio_selection_3"
+        region_field = "x_studio_selection_1"
+        managed_field = "x_studio_selection_4"
+        meta = staff.fields_get([role_field, access_field, region_field, managed_field], ["selection"])
+        roles = dict(meta[role_field]["selection"])
+        rights = dict(meta[access_field]["selection"])
+        regions = dict(meta[region_field]["selection"])
+        managed_regions = dict(meta[managed_field]["selection"])
+        verified = staff.search([("x_studio_char_2", "=", line_id), ("active", "=", True)], limit=2)
+        can_view_team = (
+            verified.ids == [employee_id] and roles.get(employee[role_field]) == "主管"
+            and rights.get(employee[access_field]) == "管理區域"
+            and regions.get(employee[region_field]) == "北部"
+            and managed_regions.get(employee[managed_field]) == "北區"
+        )
+
+    if can_view_team:
+        direct_reports = staff.search([
+            ("id", "=", 2), ("name", "=", "Jacky_test"), ("company_id", "=", company_id),
+            ("parent_id", "=", employee_id), ("active", "=", True),
+        ]).filtered(lambda person: roles.get(person[role_field]) == "業務" and regions.get(person[region_field]) == "北部")
+        people = staff.browse(employee_id) | direct_reports
+        team_domain = [term for term in month_records if term[0] != "x_studio_many2one_1"]
+        team_domain.append(("x_studio_many2one_1", "in", people.ids))
+        totals = performance._read_group(team_domain, ["x_studio_many2one_1"], ["x_studio_monetary_1:sum"])
+        amounts = {person.id: round(amount or 0, 2) for person, amount in totals}
+        result = {
+            "ok": True,
+            "records": [],
+            "nextCursor": None,
+            "totalAmount": round(sum(amounts.values()), 2),
+            "overview": {
+                "scope": "region", "scopeLabel": "北部", "pilot": True,
+                "salespeople": [{"name": person.name, "amount": amounts.get(person.id, 0)} for person in people],
+            },
+        }
+    else:
+        page_records = month_records + ([("id", "<", int(cursor))] if cursor is not None else [])
+        page = performance.search(page_records, limit=51, order="id desc")
+        rows = page[:50]
+        result = {
+            "ok": True,
+            "records": [{
+                "id": row.id,
+                "label": row.x_studio_many2one_3.display_name or row.x_name,
+                "date": row.x_studio_date_1.isoformat(),
+                "hospital": row.x_studio_many2one_2.display_name or "",
+                "quantity": row.x_studio_float_1,
+                "department": department_options.get(row.x_studio_selection_1, ""),
+                "doctor": row.x_studio_char_1 or "",
+                "unitPrice": row.x_studio_twd if row.x_studio_twd and row[unit_currency_field] == currency else None,
+                "amount": row.x_studio_monetary_1,
+            } for row in rows],
+            "nextCursor": str(rows[-1].id) if len(page) > 50 else None,
+        }
+        if cursor is None:
+            totals = performance._read_group(month_records, [], ["x_studio_monetary_1:sum"])
+            result["totalAmount"] = round(totals[0][0] or 0, 2) if totals else 0
 
 else:
     service_date = date_value(payload.get("serviceDate"))
