@@ -78,3 +78,9 @@ if transfer.x_studio_selection_2 != target_status:
             "x_studio_selection_2": target_status,
             "x_studio_text_1": reason,
         })
+
+action = {
+    "type": "ir.actions.client",
+    "tag": "jt_line_transfer_result",
+    "params": {"ok": True, "recordId": transfer.id, "status": target_status},
+}
