@@ -77,15 +77,15 @@ LINE 驗收後，在 `CONFIG.operationPages` 加入對應頁面代碼
 
 ### 確認接收與拒絕交接
 
-正式驗收先限 `Amy_test`（員工 #3）處理交接單 #17。Odoo 已儲存名為
-「LINE 機台交接驗收 #17」的伺服器動作，尚未接上 LINE。啟用前先確認 Amy_test
-有核對過的 LINE User ID，且與 Jacky_test 的綁定不同。Make 只可將 Worker 驗證後
-的 LINE ID 傳入動作的 `line_verified_user_id`，供 Odoo 與員工紀錄交叉比對。
-此驗收動作要求既有 Odoo 系統管理員執行權限，且只接受 Amy_test 與 #17 的組合。
+Make 的機台交接路由以 `model=transfer`、`action=RESPOND_TRANSFER`、正整數交接單 ID，
+以及 `accept`／`reject` 驗證請求。現有驗收路由若按單號篩選，切換時須停用重疊路由，
+保證一次請求只呼叫一個 Odoo 動作。查詢與處理採用相同的員工授權範圍。
 
-Make 先比對 Worker 驗證的 LINE 識別碼與啟用中的員工，再以這個員工身分查詢交接單。
-禁止採用前端申報的員工編號或公司。只對本人為接收人的交接單呼叫
-[`integrations/odoo/transfer_decision.py`](integrations/odoo/transfer_decision.py) 的 Odoo 伺服器動作。
+Make 先以 Worker 驗證的 LINE ID 唯一比對同公司、已啟用且已開放 LINE 的員工。
+從 Odoo 查詢指定交接單時，同時限制公司和接收人，並核對 `待確認` 狀態。
+相同決定的重送可回傳已完成的原結果。相反決定或其他狀態回覆錯誤。
+只將本頁中符合相同接收資格且狀態為「待確認」的 ID 放進 `respondableIds`。
+前端提供的交接單 ID 只用於查詢目標，員工與公司均由後端比對取得。
 
 建立 Odoo Studio 的程式碼動作，模型綁定 `x_1213`，並限制整合帳號的執行權限。
 伺服器動作的 `active_model` 固定為 `x_1213`，`active_id` 與 `active_ids` 以已核對的
