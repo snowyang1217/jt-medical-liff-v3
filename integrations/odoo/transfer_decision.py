@@ -10,9 +10,9 @@ if not env.user.has_group("base.group_system"):
     raise UserError("請使用已授權的 Odoo 整合帳號。")
 if context.get("active_model") != "x_1213" or len(records) != 1:
     raise UserError("請選擇一筆機台交接紀錄。")
-# This server action is deployed only for Amy_test on transfer #17.
-if records.ids != [17] or context.get("active_id") != 17 or employee_id != 3:
-    raise UserError("這筆交接未開放 LINE 試用。")
+record_id = context.get("active_id")
+if not isinstance(record_id, int) or isinstance(record_id, bool) or record_id < 1 or records.ids != [record_id]:
+    raise UserError("請選擇一筆機台交接紀錄。")
 if (
     not isinstance(employee_id, int) or isinstance(employee_id, bool) or employee_id < 1
     or not isinstance(company_id, int) or isinstance(company_id, bool) or company_id < 1
@@ -37,7 +37,7 @@ transfer.invalidate_recordset()
 
 receiver = transfer.x_studio_many2one_3
 if (
-    receiver.id != employee_id or not receiver.active
+    receiver.id != employee_id or not receiver.active or not receiver.x_studio_boolean_1
     or receiver.company_id.id != company_id
     or not receiver.x_studio_char_2
     or receiver.x_studio_char_2 != context.get("line_verified_user_id")
